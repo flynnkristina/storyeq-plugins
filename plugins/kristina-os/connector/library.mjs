@@ -55330,44 +55330,53 @@ var import_google_auth_library2 = __toESM(require_src5(), 1);
 import { promises as fs4 } from "node:fs";
 import os2 from "node:os";
 import path4 from "node:path";
-var SEARCH_ROOTS = ["Downloads", "Desktop", "Documents", ".config"];
 var SKIP = /* @__PURE__ */ new Set(["node_modules", ".git", "Library", ".Trash"]);
-var MAX_DEPTH = 4;
 var MAX_KEY_BYTES = 2e4;
+var PER_FILE_MS = 1e3;
+var TOTAL_MS = 5e3;
+var MAX_FILES = 2e3;
+var withTimeout = (promise2, ms) => Promise.race([promise2, new Promise((resolve) => setTimeout(() => resolve(null), ms).unref())]);
 async function readKey(file2) {
-  const stat2 = await fs4.stat(file2);
-  if (!stat2.isFile() || stat2.size > MAX_KEY_BYTES) return null;
   try {
-    const d = JSON.parse(await fs4.readFile(file2, "utf8"));
+    const stat2 = await fs4.stat(file2);
+    if (!stat2.isFile() || stat2.size > MAX_KEY_BYTES) return null;
+    const raw = await withTimeout(fs4.readFile(file2, "utf8"), PER_FILE_MS);
+    if (!raw) return null;
+    const d = JSON.parse(raw);
     if (d.type !== "service_account" || !d.client_email || !d.private_key) return null;
     return { file: file2, email: d.client_email, project: d.project_id, role: roleFromEmail(d.client_email) };
   } catch {
     return null;
   }
 }
-async function walk(dir, depth, found) {
-  if (depth > MAX_DEPTH) return;
+async function walk(dir, depth, maxDepth, found, budget) {
+  if (depth > maxDepth || Date.now() > budget.deadline || budget.files > MAX_FILES) return;
   let entries;
   try {
-    entries = await fs4.readdir(dir, { withFileTypes: true });
+    entries = await withTimeout(fs4.readdir(dir, { withFileTypes: true }), PER_FILE_MS);
   } catch {
     return;
   }
-  for (const e2 of entries) {
+  for (const e2 of entries ?? []) {
+    if (Date.now() > budget.deadline || budget.files > MAX_FILES) return;
     const full = path4.join(dir, e2.name);
     if (e2.isDirectory()) {
-      if (!SKIP.has(e2.name)) await walk(full, depth + 1, found);
+      if (!SKIP.has(e2.name) && !e2.name.startsWith(".")) await walk(full, depth + 1, maxDepth, found, budget);
     } else if (e2.isFile() && e2.name.toLowerCase().endsWith(".json")) {
+      budget.files++;
       const key = await readKey(full);
       if (key) found.push(key);
     }
   }
 }
-async function findKeys({ home = os2.homedir() } = {}) {
+async function findKeys({ home = os2.homedir(), env = process.env, folder } = {}) {
+  const roots = folder ? [[path4.resolve(folder.replace(/^~(?=\/|$)/, home)), 2]] : [[path4.join(configDir(env), "keys"), 0], [path4.join(home, "Downloads"), 1], [path4.join(home, "Desktop"), 1]];
   const found = [];
-  for (const root of SEARCH_ROOTS) await walk(path4.join(home, root), 0, found);
+  const budget = { deadline: Date.now() + TOTAL_MS, files: 0 };
+  for (const [root, maxDepth] of roots) await walk(root, 0, maxDepth, found, budget);
   const seen = /* @__PURE__ */ new Set();
-  return found.filter((k) => !seen.has(k.file) && seen.add(k.file));
+  const keys = found.filter((k) => !seen.has(k.file) && seen.add(k.file));
+  return { searched: roots.map(([r2]) => r2), stoppedEarly: Date.now() > budget.deadline || budget.files > MAX_FILES, keys };
 }
 async function sharedDrives(keyFile) {
   const client = await new import_google_auth_library2.GoogleAuth({ keyFile, scopes: ["https://www.googleapis.com/auth/drive"] }).getClient();
@@ -55470,9 +55479,9 @@ async function buildServer(loader, { env = process.env, writeTool = true } = {})
     inputSchema: {}
   }, wrap(async () => env.LIBRARY_BACKEND === "local" ? { connected: true, role: loader.startRole } : status(env)));
   server.registerTool("find_library_keys", {
-    description: "Look on this machine (Downloads, Desktop, Documents, ~/.config) for Google service-account key files that could connect the library. Returns each file's path, account and role. Never returns key contents.",
-    inputSchema: {}
-  }, wrap(() => findKeys()));
+    description: "Look on this machine for Google service-account key files that could connect the library: the plugin's private folder, then Downloads and Desktop. Pass folder to look somewhere else. Returns each file's path, account and role, never key contents.",
+    inputSchema: { folder: external_exports.string().optional().describe("A folder to search instead, e.g. ~/Documents/Keys") }
+  }, wrap(({ folder }) => findKeys({ env, folder })));
   server.registerTool("connect_library", {
     description: "Connect the library using a key file found by find_library_keys: checks the key with Google, finds the Shared Drive it can see, stores the key privately in ~/.config, and saves the settings. Pass drive only if asked to choose.",
     inputSchema: {

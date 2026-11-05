@@ -54,9 +54,9 @@ export async function buildServer(loader, { env = process.env, writeTool = true 
   }, wrap(async () => (env.LIBRARY_BACKEND === "local" ? { connected: true, role: loader.startRole } : status(env))));
 
   server.registerTool("find_library_keys", {
-    description: "Look on this machine (Downloads, Desktop, Documents, ~/.config) for Google service-account key files that could connect the library. Returns each file's path, account and role. Never returns key contents.",
-    inputSchema: {},
-  }, wrap(() => findKeys()));
+    description: "Look on this machine for Google service-account key files that could connect the library: the plugin's private folder, then Downloads and Desktop. Pass folder to look somewhere else. Returns each file's path, account and role, never key contents.",
+    inputSchema: { folder: z.string().optional().describe("A folder to search instead, e.g. ~/Documents/Keys") },
+  }, wrap(({ folder }) => findKeys({ env, folder })));
 
   server.registerTool("connect_library", {
     description: "Connect the library using a key file found by find_library_keys: checks the key with Google, finds the Shared Drive it can see, stores the key privately in ~/.config, and saves the settings. Pass drive only if asked to choose.",

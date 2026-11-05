@@ -17,10 +17,12 @@ test("finds service-account keys without returning their contents", async () => 
   await mkdir(path.join(home, "Downloads/nested"), { recursive: true });
   await writeFile(path.join(home, "Downloads/nested/k1.json"), fakeKey("library-writer@p.iam.gserviceaccount.com"));
   await writeFile(path.join(home, "Downloads/other.json"), JSON.stringify({ hello: "world" }));
-  const found = await findKeys({ home });
-  assert.equal(found.length, 1);
-  assert.equal(found[0].role, "writer");
-  assert.ok(!JSON.stringify(found).includes("PRIVATE KEY"));
+  const result = await findKeys({ home, env: { LIBRARY_CONFIG_DIR: path.join(home, "cfg") } });
+  assert.equal(result.keys.length, 1);
+  assert.equal(result.keys[0].role, "writer");
+  assert.ok(!JSON.stringify(result).includes("PRIVATE KEY"));
+  const named = await findKeys({ home, env: {}, folder: path.join(home, "Downloads") });
+  assert.equal(named.keys.length, 1);
 });
 
 test("role comes from the account name", () => {
