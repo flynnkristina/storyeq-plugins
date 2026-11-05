@@ -11,7 +11,7 @@ import { createLibrary } from "./library.js";
 import { LocalFolderBackend } from "./backends/local.js";
 import { DriveBackend } from "./backends/drive.js";
 import { readConfig } from "./config.js";
-import { findKeys, connect, status } from "./setup.js";
+import { findKeys, connect, status, disconnect, credentialsFor } from "./setup.js";
 
 const NOT_SET_UP = "Your library isn't set up on this machine yet. Say \"set up my library\" and I'll find your key and connect it.";
 
@@ -27,7 +27,7 @@ export function libraryLoader(env = process.env) {
       if (cached) return cached;
       const s = await readConfig(env);
       if (!s) throw new Error(NOT_SET_UP);
-      cached = createLibrary({ backend: new DriveBackend({ driveId: s.driveId, keyFile: s.keyFile }), role: s.role });
+      cached = createLibrary({ backend: new DriveBackend({ driveId: s.driveId, credentials: await credentialsFor(s, env) }), role: s.role });
       return cached;
     },
     reset: () => { cached = undefined; },
@@ -46,7 +46,7 @@ const wrap = (fn) => async (args) => {
 
 export async function buildServer(loader, { env = process.env, writeTool = true } = {}) {
   const name = env.LIBRARY_NAME ?? "library";
-  const server = new McpServer({ name: "library", version: "0.3.0" });
+  const server = new McpServer({ name: "library", version: "0.4.0" });
 
   server.registerTool("library_status", {
     description: `Check whether the ${name} is set up and reachable on this machine, and which library and role it uses.`,
@@ -59,13 +59,22 @@ export async function buildServer(loader, { env = process.env, writeTool = true 
   }, wrap(({ folder }) => findKeys({ env, folder })));
 
   server.registerTool("connect_library", {
-    description: "Connect the library using a key file found by find_library_keys: checks the key with Google, finds the Shared Drive it can see, stores the key privately in ~/.config, and saves the settings. Pass drive only if asked to choose.",
+    description: "Connect the library using a key file found by find_library_keys: checks the key with Google, finds the Shared Drive it can see, moves the key into this Mac's Keychain, then deletes every file copy of that key it can find. Pass drive only if asked to choose.",
     inputSchema: {
       keyFile: z.string().describe("Path to the key file"),
       drive: z.string().optional().describe("Shared Drive name or id, only when more than one is visible"),
     },
   }, wrap(async ({ keyFile, drive }) => {
     const result = await connect({ keyFile, drive, env });
+    loader.reset?.();
+    return result;
+  }));
+
+  server.registerTool("disconnect_library", {
+    description: "Disconnect the library on this machine: removes its key from the Keychain and deletes the settings. Only when the person has asked to disconnect and said yes.",
+    inputSchema: {},
+  }, wrap(async () => {
+    const result = await disconnect(env);
     loader.reset?.();
     return result;
   }));
@@ -106,5 +115,7 @@ export async function main(env = process.env) {
   await server.connect(new StdioServerTransport());
 }
 
-const isMain = process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href;
+const isMain = typeof import.meta.main === "boolean"
+  ? import.meta.main
+  : Boolean(process.argv[1]) && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href;
 if (isMain) await main();

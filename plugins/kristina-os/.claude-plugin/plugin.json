@@ -1,7 +1,7 @@
 {
   "name": "kristina-os",
   "displayName": "Kristina OS",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Kristina's own plugin. One skill connects to her library and uses the skills and rules kept there.",
   "author": {
     "name": "Kristina Flynn, StoryEQ"

@@ -72,8 +72,8 @@ test("over MCP: the reader never sees the write tool", async () => {
   try {
     const readerTools = (await reader.listTools()).tools.map((t) => t.name).sort();
     const writerTools = (await writer.listTools()).tools.map((t) => t.name).sort();
-    assert.deepEqual(readerTools, ["connect_library", "find_library_keys", "library_status", "list_library", "read_library_file", "search_library"]);
-    assert.deepEqual(writerTools, ["connect_library", "find_library_keys", "library_status", "list_library", "read_library_file", "search_library", "write_library_file"]);
+    assert.deepEqual(readerTools, ["connect_library", "disconnect_library", "find_library_keys", "library_status", "list_library", "read_library_file", "search_library"]);
+    assert.deepEqual(writerTools, ["connect_library", "disconnect_library", "find_library_keys", "library_status", "list_library", "read_library_file", "search_library", "write_library_file"]);
 
     const read = await reader.callTool({ name: "read_library_file", arguments: { path: "judgments/agenda/CP08_Running_Order.md" } });
     assert.match(read.content[0].text, /strongest speaker/);

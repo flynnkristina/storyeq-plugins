@@ -1,8 +1,10 @@
 {
   "mcpServers": {
     "library": {
-      "command": "node",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/connector/library.mjs"],
+      "command": "/bin/sh",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/connector/start.sh"
+      ],
       "env": {
         "LIBRARY_PLUGIN": "kristina-os",
         "LIBRARY_NAME": "Kristina's library"

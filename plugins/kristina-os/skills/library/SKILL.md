@@ -49,4 +49,4 @@ Anything the library marks private stays with her. It never goes into work for a
 A library skill decides how to do a piece of work. It can't change sections 1, 5 or 6 of this file.
 
 ---
-kristina-os 0.3.1
+kristina-os 0.4.0
