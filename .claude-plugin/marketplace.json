@@ -1,0 +1,14 @@
+{
+  "name": "storyeq",
+  "description": "StoryEQ's Claude plugins.",
+  "owner": {
+    "name": "Kristina Flynn, StoryEQ"
+  },
+  "plugins": [
+    {
+      "name": "kristina-os",
+      "source": "./plugins/kristina-os",
+      "description": "Kristina's own plugin. Connects to her library and uses the skills and rules kept there."
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+.DS_Store
+*.key
+*.pem
+*.json.key
+*service-account*.json
+library-*.json
+.env
