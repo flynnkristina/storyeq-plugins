@@ -36,7 +36,11 @@ The second prints the new version number. In the desktop app, turn on Sync autom
 
 ## What's not here, on purpose
 
-This repo is public. It holds instructions only: no keys, no passwords, no library contents and no details of where a library lives. Each plugin's connection to its library is set up on the person's own machine.
+This repo is public. It holds instructions only: no keys, no passwords, no library contents and no details of where a library lives. Each plugin carries its connector code, but the connection itself is set up on the person's own machine by the plugin's setup skill, which saves its settings in `~/.config/<plugin>/`.
+
+## The connector
+
+`connector/` is the source for the library connector every plugin carries. After changing it: `npm install`, `npm test`, `npm run build`, then copy `connector/dist/library.mjs` into each plugin's `connector/` folder and raise that plugin's version.
 
 ## Shipping a change
 
