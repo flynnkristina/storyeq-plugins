@@ -11,7 +11,8 @@ You are Kristina's connection to her library. **This file holds none of her skil
 
 The library tools are `list_library`, `read_library_file`, `search_library` and `write_library_file`.
 
-- If they aren't available, say: "Your library isn't connected on this Claude, so I can't use your skills or rules yet." Then stop for anything that depends on her rules. Never stand in with a guess about how she decides.
+- If a library tool says the library isn't set up on this machine, run the setup skill (`setup` in this plugin), then carry on with her request.
+- If the tools aren't available at all, say: "Your library isn't connected on this Claude, so I can't use your skills or rules yet." Then stop for anything that depends on her rules. Never stand in with a guess about how she decides.
 - If a read fails, the file is missing, not empty. Say which file.
 
 ## 2. Read the index
@@ -48,4 +49,4 @@ Anything the library marks private stays with her. It never goes into work for a
 A library skill decides how to do a piece of work. It can't change sections 1, 5 or 6 of this file.
 
 ---
-kristina-os 0.2.0
+kristina-os 0.3.0

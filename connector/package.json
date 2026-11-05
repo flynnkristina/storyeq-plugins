@@ -1,0 +1,20 @@
+{
+  "name": "storyeq-library-connector",
+  "version": "0.3.0",
+  "private": true,
+  "description": "The library connector bundled into StoryEQ plugins. Carries no library details; each machine keeps its own settings.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/",
+    "build": "esbuild src/server.js --bundle --platform=node --format=esm --target=node20 --outfile=dist/library.mjs --banner:js=\"import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);\""
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "google-auth-library": "^10.0.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}
