@@ -6,6 +6,7 @@ import path from "node:path";
 import { GoogleAuth } from "google-auth-library";
 import { configDir, readConfig, writeConfig, roleFromEmail } from "./config.js";
 import { DriveBackend } from "./backends/drive.js";
+import { SERVICE, storeKey, readKeyJson, deleteKey } from "./keychain.js";
 
 const SKIP = new Set(["node_modules", ".git", "Library", ".Trash"]);
 const MAX_KEY_BYTES = 20_000;
@@ -24,7 +25,7 @@ async function readKey(file) {
     if (!raw) return null;
     const d = JSON.parse(raw);
     if (d.type !== "service_account" || !d.client_email || !d.private_key) return null;
-    return { file, email: d.client_email, project: d.project_id, role: roleFromEmail(d.client_email) };
+    return { file, email: d.client_email, project: d.project_id, keyId: d.private_key_id, role: roleFromEmail(d.client_email) };
   } catch {
     return null;
   }
@@ -66,8 +67,8 @@ export async function findKeys({ home = os.homedir(), env = process.env, folder 
   return { searched: roots.map(([r]) => r), stoppedEarly: Date.now() > budget.deadline || budget.files > MAX_FILES, keys };
 }
 
-async function sharedDrives(keyFile) {
-  const client = await new GoogleAuth({ keyFile, scopes: ["https://www.googleapis.com/auth/drive"] }).getClient();
+async function sharedDrives(credentials) {
+  const client = await new GoogleAuth({ credentials, scopes: ["https://www.googleapis.com/auth/drive"] }).getClient();
   try {
     const r = await client.request({ url: "https://www.googleapis.com/drive/v3/drives", params: { pageSize: 100 } });
     return r.data.drives ?? [];
@@ -76,13 +77,28 @@ async function sharedDrives(keyFile) {
   }
 }
 
+const pluginName = (env) => (env.LIBRARY_PLUGIN || "library").replace(/[^a-z0-9-]/gi, "");
+
+export async function credentialsFor(settings, env = process.env) {
+  if (settings.keyStore === "keychain") {
+    const json = await readKeyJson({ account: pluginName(env), service: settings.keychainService ?? SERVICE });
+    if (!json) throw new Error(`The library key isn't in this Mac's Keychain any more (looked for "${settings.keychainService ?? SERVICE}"). Say "set up my library" to connect it again.`);
+    return JSON.parse(json);
+  }
+  return JSON.parse(await fs.readFile(settings.keyFile, "utf8"));
+}
+
+// Connect: check the key with Google, find its Shared Drive, put the key in the Keychain,
+// check the Keychain copy works, then delete every file copy of that key it can find.
 export async function connect({ keyFile, drive, env = process.env }) {
   if (!keyFile) throw new Error("Give the key file's path (find_library_keys lists them)");
   const key = await readKey(path.resolve(keyFile.replace(/^~(?=\/)/, os.homedir())));
   if (!key) throw new Error("That file isn't a Google service-account key");
   if (!key.role) throw new Error(`Can't tell from ${key.email} whether this is the reader or the writer key`);
+  const keyJson = await fs.readFile(key.file, "utf8");
+  const credentials = JSON.parse(keyJson);
 
-  const drives = await sharedDrives(key.file);
+  const drives = await sharedDrives(credentials);
   if (!drives.length) {
     throw new Error(`The key works, but ${key.email} hasn't been added to any Shared Drive yet. Add it to the library's Shared Drive (writer as Content manager, reader as Viewer), then try again.`);
   }
@@ -92,32 +108,50 @@ export async function connect({ keyFile, drive, env = process.env }) {
     return { connected: false, needsChoice: true, drives: drives.map((d) => d.name), message: "This key can see more than one Shared Drive. Say which is the library." };
   }
 
-  const dir = configDir(env);
-  const keysDir = path.join(dir, "keys");
-  await fs.mkdir(keysDir, { recursive: true, mode: 0o700 });
-  await fs.chmod(dir, 0o700);
-  await fs.chmod(keysDir, 0o700);
-  const stored = path.join(keysDir, `library-${key.role}.json`);
-  if (path.resolve(key.file) !== stored) await fs.copyFile(key.file, stored);
-  await fs.chmod(stored, 0o600);
+  const account = pluginName(env);
+  await storeKey({ account, keyJson, label: `${SERVICE} (${account}, ${key.role})` });
+  const back = JSON.parse((await readKeyJson({ account })) ?? "null");
+  if (!back || back.private_key !== credentials.private_key || back.private_key_id !== credentials.private_key_id) {
+    throw new Error("The key went into the Keychain but didn't read back the same, so nothing was deleted. Try again.");
+  }
+  const top = await new DriveBackend({ driveId: chosen.id, credentials: back }).list("");
 
   const settings = {
     driveId: chosen.id,
     driveName: chosen.name,
-    keyFile: stored,
     role: key.role,
     account: key.email,
+    keyStore: "keychain",
+    keychainService: SERVICE,
     connectedAt: new Date().toISOString(),
   };
   const where = await writeConfig(settings, env);
-  const top = await new DriveBackend({ driveId: chosen.id, keyFile: stored }).list("");
+
+  // Every file copy of this same key, wherever setup looks, plus the one it was given.
+  const copies = new Set([key.file]);
+  for (const k of (await findKeys({ env })).keys) if (k.keyId && k.keyId === key.keyId) copies.add(k.file);
+  const deleted = [];
+  const notDeleted = [];
+  for (const file of copies) {
+    try {
+      await fs.unlink(file);
+      deleted.push(file);
+    } catch (err) {
+      notDeleted.push({ file, reason: err.message });
+    }
+  }
+  await fs.rmdir(path.join(configDir(env), "keys")).catch(() => {});
+  const otherKeys = (await findKeys({ env })).keys.map((k) => ({ file: k.file, account: k.email, role: k.role }));
+
   return {
     connected: true,
     library: chosen.name,
     role: key.role,
+    keyNowLivesIn: `this Mac's Keychain, as "${SERVICE}" (${account})`,
     settingsFile: where,
-    keyStoredAt: stored,
-    originalKeyFile: path.resolve(key.file) === stored ? null : key.file,
+    deletedCopies: deleted,
+    couldNotDelete: notDeleted,
+    otherKeysStillOnThisMac: otherKeys,
     topLevel: top.map((e) => e.path),
   };
 }
@@ -126,9 +160,37 @@ export async function status(env = process.env) {
   const settings = await readConfig(env);
   if (!settings) return { connected: false, message: "Not set up on this machine yet." };
   try {
-    const top = await new DriveBackend({ driveId: settings.driveId, keyFile: settings.keyFile }).list("");
-    return { connected: true, library: settings.driveName, role: settings.role, account: settings.account, topLevel: top.map((e) => e.path) };
+    const credentials = await credentialsFor(settings, env);
+    const top = await new DriveBackend({ driveId: settings.driveId, credentials }).list("");
+    return {
+      connected: true,
+      library: settings.driveName,
+      role: settings.role,
+      account: settings.account,
+      keyLivesIn: settings.keyStore === "keychain" ? `Keychain, "${settings.keychainService}"` : settings.keyFile,
+      topLevel: top.map((e) => e.path),
+    };
   } catch (err) {
     return { connected: false, library: settings.driveName, role: settings.role, message: `Set up, but not reachable: ${err.message}` };
   }
+}
+
+// Disconnect: remove the key from the Keychain and the settings file. The key still works
+// until it's deleted in Google Cloud, so the reply says so.
+export async function disconnect(env = process.env) {
+  const settings = await readConfig(env);
+  const removedKey = await deleteKey({ account: pluginName(env), service: settings?.keychainService ?? SERVICE });
+  let removedSettings = false;
+  try {
+    await fs.unlink(path.join(configDir(env), "library.json"));
+    removedSettings = true;
+  } catch {}
+  return {
+    removedFromKeychain: removedKey,
+    removedSettings,
+    stillToDo: settings?.account
+      ? `Delete this key in Google Cloud (IAM, Service accounts, ${settings.account}, Keys) so it stops working everywhere.`
+      : "Nothing was set up here.",
+    otherKeysStillOnThisMac: (await findKeys({ env })).keys.map((k) => ({ file: k.file, account: k.email })),
+  };
 }

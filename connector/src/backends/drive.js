@@ -27,12 +27,12 @@ function splitPath(relPath = "") {
 }
 
 export class DriveBackend {
-  constructor({ driveId, keyFile, client } = {}) {
+  constructor({ driveId, keyFile, credentials, client } = {}) {
     if (!driveId) throw new Error("DriveBackend needs LIBRARY_DRIVE_ID");
-    if (!keyFile && !client) throw new Error("DriveBackend needs LIBRARY_KEY_FILE");
+    if (!keyFile && !credentials && !client) throw new Error("DriveBackend needs a key");
     this.driveId = driveId;
     this.client = client;
-    this.auth = client ? null : new GoogleAuth({ keyFile, scopes: ["https://www.googleapis.com/auth/drive"] });
+    this.auth = client ? null : new GoogleAuth({ ...(credentials ? { credentials } : { keyFile }), scopes: ["https://www.googleapis.com/auth/drive"] });
   }
 
   async http(opts) {

@@ -40,7 +40,7 @@ This repo is public. It holds instructions only: no keys, no passwords, no libra
 
 ## The connector
 
-`connector/` is the source for the library connector every plugin carries. After changing it: `npm install`, `npm test`, `npm run build`, then copy `connector/dist/library.mjs` into each plugin's `connector/` folder and raise that plugin's version.
+`connector/` is the source for the library connector every plugin carries. It's built with Bun into self-contained Mac programs (Apple chip and Intel), compressed, so the person needs nothing installed. After changing it: `npm install`, `npm test`, `npm run build`, then copy `connector/dist/library-arm64.gz` and `library-x64.gz` into each plugin's `connector/` folder (beside `start.sh`) and raise that plugin's version. Keys are kept in the Mac's Keychain, never in files.
 
 ## Shipping a change
 
