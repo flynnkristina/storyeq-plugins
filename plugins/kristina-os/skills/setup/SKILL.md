@@ -18,11 +18,11 @@ Call `library_status`.
 
 ## 2. Find the key
 
-Call `find_library_keys`. It looks in Downloads, Desktop, Documents and `~/.config`.
+Call `find_library_keys`. It looks in the plugin's private folder, then Downloads and Desktop.
 
 - **One writer key found:** use it. Tell her the file name and the account.
 - **Several found:** list them by file name and account, and ask which. Prefer a writer key for Kristina OS.
-- **None found:** say: "I can't find your library key on this Mac. It's in 1Password, saved as a JSON file. Download it (to Downloads is fine), then tell me and I'll look again." Then wait.
+- **None found:** say: "I can't find your library key on this Mac. It's in 1Password, saved as a JSON file. Download it (to Downloads is fine), then tell me and I'll look again." Then wait. If she says it's in another folder, call `find_library_keys` again with that `folder`.
 
 ## 3. Connect
 
