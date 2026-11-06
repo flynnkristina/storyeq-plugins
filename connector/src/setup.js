@@ -79,6 +79,27 @@ async function sharedDrives(credentials) {
 
 const pluginName = (env) => (env.LIBRARY_PLUGIN || "library").replace(/[^a-z0-9-]/gi, "");
 
+const looksPrivate = (d) => /private/i.test(d.name ?? "");
+const matches = (d, want) => d.id === want || d.name.toLowerCase() === String(want).toLowerCase();
+
+// Which drive is the main library: the one asked for, the only drive, or the only one
+// whose name doesn't say "private".
+export function pickMain(drives, want) {
+  if (want) return drives.find((d) => matches(d, want)) ?? null;
+  if (drives.length === 1) return drives[0];
+  const plain = drives.filter((d) => !looksPrivate(d));
+  return plain.length === 1 ? plain[0] : null;
+}
+
+// Which drive holds private files: the one asked for, or the only other drive whose name
+// says "private". Never the main drive, and never a guess between several.
+export function pickPrivate(drives, mainId, want) {
+  const others = drives.filter((d) => d.id !== mainId);
+  if (want) return others.find((d) => matches(d, want)) ?? null;
+  const named = others.filter(looksPrivate);
+  return named.length === 1 ? named[0] : null;
+}
+
 export async function credentialsFor(settings, env = process.env) {
   if (settings.keyStore === "keychain") {
     const json = await readKeyJson({ account: pluginName(env), service: settings.keychainService ?? SERVICE });
@@ -102,8 +123,7 @@ export async function connect({ keyFile, drive, env = process.env }) {
   if (!drives.length) {
     throw new Error(`The key works, but ${key.email} hasn't been added to any Shared Drive yet. Add it to the library's Shared Drive (writer as Content manager, reader as Viewer), then try again.`);
   }
-  let chosen = drives.length === 1 ? drives[0] : null;
-  if (drive) chosen = drives.find((d) => d.id === drive || d.name.toLowerCase() === String(drive).toLowerCase());
+  const chosen = pickMain(drives, drive);
   if (!chosen) {
     return { connected: false, needsChoice: true, drives: drives.map((d) => d.name), message: "This key can see more than one Shared Drive. Say which is the library." };
   }
@@ -116,9 +136,11 @@ export async function connect({ keyFile, drive, env = process.env }) {
   }
   const top = await new DriveBackend({ driveId: chosen.id, credentials: back }).list("");
 
+  const priv = key.role === "writer" ? pickPrivate(drives, chosen.id) : null;
   const settings = {
     driveId: chosen.id,
     driveName: chosen.name,
+    ...(priv ? { privateDriveId: priv.id, privateDriveName: priv.name } : {}),
     role: key.role,
     account: key.email,
     keyStore: "keychain",
@@ -146,6 +168,7 @@ export async function connect({ keyFile, drive, env = process.env }) {
   return {
     connected: true,
     library: chosen.name,
+    privateDrive: priv ? priv.name : "none connected (private/ files are refused until one is)",
     role: key.role,
     keyNowLivesIn: `this Mac's Keychain, as "${SERVICE}" (${account})`,
     settingsFile: where,
@@ -156,15 +179,50 @@ export async function connect({ keyFile, drive, env = process.env }) {
   };
 }
 
+// Connect the private drive to a library that's already set up, using the key already in
+// the Keychain. Only the writer connection gets one.
+export async function connectPrivate({ drive, env = process.env } = {}) {
+  const settings = await readConfig(env);
+  if (!settings) throw new Error("Your library isn't set up on this machine yet. Say \"set up my library\" first.");
+  if (settings.role !== "writer") throw new Error("Only the library's writer connection can have a private drive. This one is read-only.");
+  const credentials = await credentialsFor(settings, env);
+  const drives = await sharedDrives(credentials);
+  const priv = pickPrivate(drives, settings.driveId, drive);
+  if (!priv) {
+    const others = drives.filter((d) => d.id !== settings.driveId).map((d) => d.name);
+    if (!others.length) {
+      return { connected: false, message: `${settings.account} can't see any Shared Drive besides the library. Add it to the private drive as Content manager, then try again.` };
+    }
+    return { connected: false, needsChoice: true, drives: others, message: "Say which of these is the private drive." };
+  }
+  const top = await new DriveBackend({ driveId: priv.id, credentials }).list("");
+  const where = await writeConfig({ ...settings, privateDriveId: priv.id, privateDriveName: priv.name }, env);
+  return {
+    connected: true,
+    library: settings.driveName,
+    privateDrive: priv.name,
+    howToUse: "Anything saved under private/ now goes to the private drive. Nothing under private/ is ever saved in the main library.",
+    settingsFile: where,
+    privateTopLevel: top.map((e) => e.path),
+  };
+}
+
 export async function status(env = process.env) {
   const settings = await readConfig(env);
   if (!settings) return { connected: false, message: "Not set up on this machine yet." };
   try {
     const credentials = await credentialsFor(settings, env);
     const top = await new DriveBackend({ driveId: settings.driveId, credentials }).list("");
+    let privateDrive = settings.role === "reader" ? "not available to a read-only connection" : "none connected (private/ files are refused until one is)";
+    if (settings.role === "writer" && settings.privateDriveId) {
+      privateDrive = await new DriveBackend({ driveId: settings.privateDriveId, credentials }).list("")
+        .then(() => `${settings.privateDriveName}, reachable`)
+        .catch((err) => `${settings.privateDriveName}, NOT reachable: ${err.message}`);
+    }
     return {
       connected: true,
       library: settings.driveName,
+      privateDrive,
       role: settings.role,
       account: settings.account,
       keyLivesIn: settings.keyStore === "keychain" ? `Keychain, "${settings.keychainService}"` : settings.keyFile,
