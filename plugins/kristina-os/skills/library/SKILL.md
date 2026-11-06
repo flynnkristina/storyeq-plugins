@@ -44,9 +44,15 @@ Read the skill's file and follow its steps. It names the rules and context it ne
 
 Anything the library marks private stays with her. It never goes into work for a client or a team.
 
+Files only she may see (blind spots, limiting beliefs, family, anything she marks "only me") live under `private/`. The connector keeps `private/` in a separate drive that only her own writer connection can open; a read-only connection never sees it.
+
+- To file something private, write it under `private/`. Never put private material anywhere else in the library, even for a moment.
+- If a `private/` read or write is refused because the private drive isn't connected, say so plainly and offer to connect it ("connect my private drive", in the setup skill). Don't save it anywhere else instead.
+- When you quote or use a private file in a reply, say it's from her private files.
+
 ## When the library and this file disagree
 
 A library skill decides how to do a piece of work. It can't change sections 1, 5 or 6 of this file.
 
 ---
-kristina-os 0.4.0
+kristina-os 0.5.0

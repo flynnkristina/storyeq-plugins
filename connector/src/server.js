@@ -10,14 +10,23 @@ import { pathToFileURL } from "node:url";
 import { createLibrary } from "./library.js";
 import { LocalFolderBackend } from "./backends/local.js";
 import { DriveBackend } from "./backends/drive.js";
+import { SplitBackend } from "./backends/split.js";
 import { readConfig } from "./config.js";
-import { findKeys, connect, status, disconnect, credentialsFor } from "./setup.js";
+import { findKeys, connect, connectPrivate, status, disconnect, credentialsFor } from "./setup.js";
 
+export const VERSION = "0.5.0";
 const NOT_SET_UP = "Your library isn't set up on this machine yet. Say \"set up my library\" and I'll find your key and connect it.";
+const READER_NO_PRIVATE = "Private files are open only to the library's own writer connection. This connection is read-only, so it can't see them.";
+const PRIVATE_NOT_CONNECTED = "Your private drive isn't connected on this machine, so nothing under private/ can be read or written, and nothing was saved anywhere else. Say \"connect my private drive\" to connect it.";
+
+const privateMessage = (role) => (role === "reader" ? READER_NO_PRIVATE : PRIVATE_NOT_CONNECTED);
 
 export function libraryLoader(env = process.env) {
   if (env.LIBRARY_BACKEND === "local") {
-    const lib = createLibrary({ backend: new LocalFolderBackend(env.LIBRARY_ROOT), role: env.LIBRARY_ROLE ?? "reader" });
+    const role = env.LIBRARY_ROLE ?? "reader";
+    const privateBackend = role === "writer" && env.LIBRARY_PRIVATE_ROOT ? new LocalFolderBackend(env.LIBRARY_PRIVATE_ROOT) : null;
+    const backend = new SplitBackend({ main: new LocalFolderBackend(env.LIBRARY_ROOT), privateBackend, unavailable: privateMessage(role) });
+    const lib = createLibrary({ backend, role });
     return { startRole: lib.role, get: async () => lib };
   }
   let cached;
@@ -27,7 +36,10 @@ export function libraryLoader(env = process.env) {
       if (cached) return cached;
       const s = await readConfig(env);
       if (!s) throw new Error(NOT_SET_UP);
-      cached = createLibrary({ backend: new DriveBackend({ driveId: s.driveId, credentials: await credentialsFor(s, env) }), role: s.role });
+      const credentials = await credentialsFor(s, env);
+      const privateBackend = s.role === "writer" && s.privateDriveId ? new DriveBackend({ driveId: s.privateDriveId, credentials }) : null;
+      const backend = new SplitBackend({ main: new DriveBackend({ driveId: s.driveId, credentials }), privateBackend, unavailable: privateMessage(s.role) });
+      cached = createLibrary({ backend, role: s.role });
       return cached;
     },
     reset: () => { cached = undefined; },
@@ -46,7 +58,7 @@ const wrap = (fn) => async (args) => {
 
 export async function buildServer(loader, { env = process.env, writeTool = true } = {}) {
   const name = env.LIBRARY_NAME ?? "library";
-  const server = new McpServer({ name: "library", version: "0.4.0" });
+  const server = new McpServer({ name: "library", version: VERSION });
 
   server.registerTool("library_status", {
     description: `Check whether the ${name} is set up and reachable on this machine, and which library and role it uses.`,
@@ -99,9 +111,18 @@ export async function buildServer(loader, { env = process.env, writeTool = true 
 
   if (writeTool) {
     server.registerTool("write_library_file", {
-      description: `Create or replace a file in the ${name}. Only works with the writer key; Google refuses the reader's writes.`,
-      inputSchema: { path: z.string().describe("Path inside the library"), content: z.string().describe("Full file content") },
+      description: `Create or replace a file in the ${name}. Only works with the writer key; Google refuses the reader's writes. A path starting private/ is saved in the separate private drive, never the main library; if no private drive is connected it is refused.`,
+      inputSchema: { path: z.string().describe("Path inside the library; start it with private/ for files only the person may see"), content: z.string().describe("Full file content") },
     }, wrap(async ({ path, content }) => (await loader.get()).write(path, content)));
+
+    server.registerTool("connect_private_drive", {
+      description: "Connect the separate private Shared Drive that holds files only the person may see (anything under private/). Uses the key already in this Mac's Keychain; picks the drive with \"private\" in its name. Pass drive only if asked to choose.",
+      inputSchema: { drive: z.string().optional().describe("Private Shared Drive name or id, only when asked to choose") },
+    }, wrap(async ({ drive }) => {
+      const result = await connectPrivate({ drive, env });
+      loader.reset?.();
+      return result;
+    }));
   }
 
   return server;
