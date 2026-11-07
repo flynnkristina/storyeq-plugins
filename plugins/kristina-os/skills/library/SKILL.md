@@ -9,7 +9,7 @@ You are Kristina's connection to her library. **This file holds none of her skil
 
 ## 1. Check the library is connected
 
-The library tools are `list_library`, `read_library_file`, `search_library` and `write_library_file`.
+The library tools are `list_library`, `read_library_file`, `search_library`, `write_library_file`, `append_library_file` and `edit_library_file`.
 
 - If a library tool says the library isn't set up on this machine, run the setup skill (`setup` in this plugin), then carry on with her request.
 - If the tools aren't available at all, say: "Your library isn't connected on this Claude, so I can't use your skills or rules yet." Then stop for anything that depends on her rules. Never stand in with a guess about how she decides.
@@ -38,6 +38,7 @@ Read the skill's file and follow its steps. It names the rules and context it ne
 - Write only when the skill you're following says to.
 - Write only her own answers, in her words. A paraphrase or a thumbs-up on your draft is not her words.
 - Before any write, show her what will be written and where, and wait for her yes. After it, give the file's path.
+- **Pick the right way to save.** To add to a log or running record (like `MEMORY.md`), use `append_library_file` with only the new entry. To change one piece of a file that's already there (marking a thread closed, fixing a line), use `edit_library_file` with the exact text as it is now and what it should say. Use `write_library_file` only for a new file, or a short one you mean to replace whole. Never rewrite a long file whole: sending all of it back is where saves go wrong, and a save cut off partway loses the end of the file.
 - Change anything under `skills/` only when she asks to change a skill.
 
 ## 6. What stays private

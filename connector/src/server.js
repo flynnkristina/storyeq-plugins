@@ -14,7 +14,7 @@ import { SplitBackend } from "./backends/split.js";
 import { readConfig } from "./config.js";
 import { findKeys, connect, connectPrivate, status, disconnect, credentialsFor } from "./setup.js";
 
-export const VERSION = "0.5.0";
+export const VERSION = "0.6.0";
 const NOT_SET_UP = "Your library isn't set up on this machine yet. Say \"set up my library\" and I'll find your key and connect it.";
 const READER_NO_PRIVATE = "Private files are open only to the library's own writer connection. This connection is read-only, so it can't see them.";
 const PRIVATE_NOT_CONNECTED = "Your private drive isn't connected on this machine, so nothing under private/ can be read or written, and nothing was saved anywhere else. Say \"connect my private drive\" to connect it.";
@@ -114,6 +114,20 @@ export async function buildServer(loader, { env = process.env, writeTool = true 
       description: `Create or replace a file in the ${name}. Only works with the writer key; Google refuses the reader's writes. A path starting private/ is saved in the separate private drive, never the main library; if no private drive is connected it is refused.`,
       inputSchema: { path: z.string().describe("Path inside the library; start it with private/ for files only the person may see"), content: z.string().describe("Full file content") },
     }, wrap(async ({ path, content }) => (await loader.get()).write(path, content)));
+
+    server.registerTool("append_library_file", {
+      description: `Add text to the end of a file in the ${name}, without sending the rest of the file. Use this for logs and running records (a new dated entry), and for any file too long to rewrite whole. Creates the file if it doesn't exist. Checks the saved copy afterwards. Writer key only; private/ paths go to the private drive.`,
+      inputSchema: { path: z.string().describe("Path inside the library, e.g. MEMORY.md"), text: z.string().describe("Only the new text to add at the end") },
+    }, wrap(async ({ path, text }) => (await loader.get()).append(path, text)));
+
+    server.registerTool("edit_library_file", {
+      description: `Change one piece of text inside a file in the ${name}, without sending the rest of the file: for example marking an open thread closed. The text to find must appear exactly once; if it appears more than once or not at all, nothing is changed. Checks the saved copy afterwards. Writer key only; private/ paths go to the private drive.`,
+      inputSchema: {
+        path: z.string().describe("Path inside the library"),
+        find: z.string().describe("The exact text as it is now, long enough to appear only once"),
+        replace: z.string().describe("What it should say instead"),
+      },
+    }, wrap(async ({ path, find, replace }) => (await loader.get()).edit(path, find, replace)));
 
     server.registerTool("connect_private_drive", {
       description: "Connect the separate private Shared Drive that holds files only the person may see (anything under private/). Uses the key already in this Mac's Keychain; picks the drive with \"private\" in its name. Pass drive only if asked to choose.",
