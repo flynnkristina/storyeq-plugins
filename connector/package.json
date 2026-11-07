@@ -1,6 +1,6 @@
 {
   "name": "storyeq-library-connector",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "description": "The library connector bundled into StoryEQ plugins. Carries no library details; each machine keeps its own settings.",
   "type": "module",
