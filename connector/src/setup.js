@@ -68,7 +68,8 @@ export async function findKeys({ home = os.homedir(), env = process.env, folder 
 }
 
 async function sharedDrives(credentials) {
-  const client = await new GoogleAuth({ credentials, scopes: ["https://www.googleapis.com/auth/drive"] }).getClient();
+  // Listing drives only reads, so it never needs more than read-only access.
+  const client = await new GoogleAuth({ credentials, scopes: ["https://www.googleapis.com/auth/drive.readonly"] }).getClient();
   try {
     const r = await client.request({ url: "https://www.googleapis.com/drive/v3/drives", params: { pageSize: 100 } });
     return r.data.drives ?? [];
@@ -134,7 +135,7 @@ export async function connect({ keyFile, drive, env = process.env }) {
   if (!back || back.private_key !== credentials.private_key || back.private_key_id !== credentials.private_key_id) {
     throw new Error("The key went into the Keychain but didn't read back the same, so nothing was deleted. Try again.");
   }
-  const top = await new DriveBackend({ driveId: chosen.id, credentials: back }).list("");
+  const top = await new DriveBackend({ driveId: chosen.id, credentials: back, readOnly: key.role !== "writer" }).list("");
 
   const priv = key.role === "writer" ? pickPrivate(drives, chosen.id) : null;
   const settings = {
@@ -212,7 +213,7 @@ export async function status(env = process.env) {
   if (!settings) return { connected: false, message: "Not set up on this machine yet." };
   try {
     const credentials = await credentialsFor(settings, env);
-    const top = await new DriveBackend({ driveId: settings.driveId, credentials }).list("");
+    const top = await new DriveBackend({ driveId: settings.driveId, credentials, readOnly: settings.role !== "writer" }).list("");
     let privateDrive = settings.role === "reader" ? "not available to a read-only connection" : "none connected (private/ files are refused until one is)";
     if (settings.role === "writer" && settings.privateDriveId) {
       privateDrive = await new DriveBackend({ driveId: settings.privateDriveId, credentials }).list("")
