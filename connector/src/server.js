@@ -38,7 +38,7 @@ export function libraryLoader(env = process.env) {
       if (!s) throw new Error(NOT_SET_UP);
       const credentials = await credentialsFor(s, env);
       const privateBackend = s.role === "writer" && s.privateDriveId ? new DriveBackend({ driveId: s.privateDriveId, credentials }) : null;
-      const backend = new SplitBackend({ main: new DriveBackend({ driveId: s.driveId, credentials }), privateBackend, unavailable: privateMessage(s.role) });
+      const backend = new SplitBackend({ main: new DriveBackend({ driveId: s.driveId, credentials, readOnly: s.role !== "writer" }), privateBackend, unavailable: privateMessage(s.role) });
       cached = createLibrary({ backend, role: s.role });
       return cached;
     },
