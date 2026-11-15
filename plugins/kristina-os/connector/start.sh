@@ -19,4 +19,5 @@ if [ ! -x "$bin" ]; then
     mv "$bin.partial" "$bin"
   fi
 fi
+export LIBRARY_HOME="$here"
 exec "$bin" "$@"

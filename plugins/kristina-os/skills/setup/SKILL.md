@@ -1,6 +1,6 @@
 ---
 name: setup
-description: Sets up, checks or disconnects Kristina's library on this Mac - finds the library key, moves it into the Mac's Keychain, deletes every other copy, connects her private drive, and checks it works. Use when Kristina says "set up my library", "connect my library", "my library isn't connected", "connect my private drive", "disconnect my library", or right after installing Kristina OS, or when the library skill reports the library or the private drive isn't connected.
+description: Sets up, checks or disconnects Kristina's library on this Mac - finds the library key, moves it into the Mac's Keychain, deletes every other copy, connects her private drive and answers drive, connects the eval bot, and checks it works. Use when Kristina says "set up my library", "connect my library", "my library isn't connected", "connect my private drive", "connect my answers drive", "connect the eval bot", "disconnect the eval bot", "disconnect my library", or right after installing Kristina OS, or when the library skill reports the library or the private drive isn't connected.
 ---
 
 # Kristina OS: set up the library
@@ -14,7 +14,7 @@ Talk her through it in plain words, one step at a time. Never show, quote or ope
 ## 1. Already set up?
 
 Call `library_status`.
-- **Connected:** say which library and role it's using, that the key is in the Keychain, and list the top-level folders. Then check `privateDrive`: if it says none is connected, go to "Connect the private drive" below; otherwise stop.
+- **Connected:** say which library and role it's using, that the key is in the Keychain, and list the top-level folders. Then check `privateDrive`: if it says none is connected, go to "Connect the private drive" below. If `answersDrive` says none is connected and she has made one, go to "Connect the answers drive". If she's asked for the eval bot and `evalBot` says not connected, go to "Connect the eval bot". Otherwise stop.
 - **Set up, but not reachable:** say what went wrong in one plain sentence, then continue from step 2 to reconnect.
 - **Not set up:** continue.
 
@@ -24,6 +24,7 @@ Call `find_library_keys`. It looks in Downloads and Desktop, where a key downloa
 
 - **One writer key found:** use it. Tell her the file name and the account.
 - **Several found:** list them by file name and account, and ask which. Prefer a writer key for Kristina OS.
+- **A key with role `evalbot`:** that's the eval bot's, not hers. Never pass it to `connect_library` (it refuses it anyway). It's connected later, in "Connect the eval bot".
 - **None found:** say: "I can't find a library key on this Mac. In Google Cloud, open the library-writer service account, then Keys, Add key, Create new key, JSON. It downloads to your Downloads folder. Tell me when it's there." Then wait. If she says it's in another folder, call `find_library_keys` again with that `folder`.
 
 ## 3. Connect
@@ -54,6 +55,30 @@ Call `connect_private_drive`. It uses the key already in the Keychain and picks 
 - **Connected:** tell her the private drive's name, and that anything filed as private now goes there and never into the main library.
 - **Asked to choose:** list the drive names, ask which is the private one, and call it again with `drive`.
 - **Can't see another drive:** say the writer account needs adding to the private drive as Content manager (and the read-only account must never be added), then try again.
+
+## Connect the answers drive
+
+Her real answers to eval cards (anything under `answers/`) live in a third Shared Drive. Only her writer account is a member of it, as Content manager. The eval bot is never added, so its guesses stay blind. Until it's connected, `answers/` files are refused, never saved in the main library.
+
+Call `connect_answers_drive`. It uses the key already in the Keychain and picks the drive with "answer" in its name.
+
+- **Connected:** tell her the answers drive's name, and that anything filed under `answers/` now goes there.
+- **Asked to choose:** list the drive names, ask which is the answers drive, and call it again with `drive`.
+- **Can't see another drive:** the writer account needs adding to the answers drive as Content manager. Then try again.
+- **Refused because the eval bot is a member:** say so plainly. Someone has to remove the bot from that drive's members first.
+
+## Connect the eval bot
+
+The eval bot is a third account that guesses her answers to review cards before she answers. It reads the library, reads and writes her private drive (its guesses go there), and is never a member of the answers drive. Its key is a separate Keychain item, so it never replaces hers. Her own library and private drive must be connected first.
+
+1. Call `find_library_keys`. Look for the key whose role is `evalbot`. None: say "In Google Cloud, open the library-evalbot service account, then Keys, Add key, Create new key, JSON. It downloads to your Downloads folder. Tell me when it's there." Then wait.
+2. Say what's about to happen: the key is checked with Google, it must see the library and the private drive and must not see the answers drive, then it's saved in the Keychain beside hers, read back, and the file deleted. Wait for her yes.
+3. Call `connect_eval_bot` with that key file.
+   - **Connected:** tell her what it reads (`reads`), what it can change (`readsAndWrites`), what it never opens (`neverOpens`), that her own key is unchanged, and which files were deleted. Give her the `startAnEvalSession` line as the way to start a session that has only the bot's connection, and say what success looks like: in that session, asking Claude to list the library works through the eval bot's connection (`library-evalbot`), and asking for anything under `answers/` is refused.
+   - **It can see the answers drive:** stop. The bot has to be removed from that drive's members first. Nothing was saved.
+   - **It can't reach the library or the private drive:** say which, and the role it needs (Viewer on the library, Content manager on the private drive). Nothing was saved.
+
+To remove it, when she asks and says yes, call `disconnect_eval_bot`. Her own connection stays. Then tell her to delete that key in Google Cloud.
 
 ## Disconnect
 

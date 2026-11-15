@@ -10,27 +10,38 @@ export function configDir(env = process.env) {
   return path.join(os.homedir(), ".config", plugin);
 }
 
-export const configFile = (env) => path.join(configDir(env), "library.json");
+// Two connections can be set up on one Mac: the person's own ("library", the writer or the
+// reader) and, beside a writer, the eval bot ("evalbot"). Each has its own settings file.
+export const SETTINGS = { main: "library", evalbot: "evalbot" };
 
-export async function readConfig(env = process.env) {
+export const configFile = (env, name = SETTINGS.main) => path.join(configDir(env), `${name}.json`);
+
+// Which connection this copy of the connector runs as. LIBRARY_IDENTITY=evalbot starts the
+// eval bot's; anything else (including nothing) starts the person's own, as before.
+export const identityOf = (env = process.env) => (env.LIBRARY_IDENTITY === "evalbot" ? "evalbot" : "main");
+
+export async function readConfig(env = process.env, name = SETTINGS.main) {
+  const file = configFile(env, name);
   try {
-    return JSON.parse(await fs.readFile(configFile(env), "utf8"));
+    return JSON.parse(await fs.readFile(file, "utf8"));
   } catch (err) {
     if (err.code === "ENOENT") return null;
-    throw new Error(`The library settings file is unreadable (${configFile(env)}): ${err.message}`);
+    throw new Error(`The library settings file is unreadable (${file}): ${err.message}`);
   }
 }
 
-export async function writeConfig(config, env = process.env) {
+export async function writeConfig(config, env = process.env, name = SETTINGS.main) {
   const dir = configDir(env);
   await fs.mkdir(dir, { recursive: true, mode: 0o700 });
   await fs.chmod(dir, 0o700);
-  await fs.writeFile(configFile(env), JSON.stringify(config, null, 2) + "\n", { mode: 0o600 });
-  return configFile(env);
+  const file = configFile(env, name);
+  await fs.writeFile(file, JSON.stringify(config, null, 2) + "\n", { mode: 0o600 });
+  return file;
 }
 
 export function roleFromEmail(email = "") {
   const local = email.split("@")[0].toLowerCase();
+  if (/(^|[-_.])eval-?bot([-_.]|$)/.test(local)) return "evalbot";
   if (local.includes("writer")) return "writer";
   if (local.includes("reader")) return "reader";
   return null;
