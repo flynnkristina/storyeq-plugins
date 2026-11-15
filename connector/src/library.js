@@ -1,12 +1,23 @@
-export const ROLES = ["reader", "writer"];
+import { isAnswersPath, isPrivatePath } from "./backends/split.js";
+
+export const ROLES = ["reader", "writer", "evalbot"];
 
 const READ_ONLY = "This connector is read-only. Only the leader's plugin can write to the library.";
+const EVALBOT_NO_ANSWERS = "The eval bot never opens answers/. Those are the leader's real answers, kept where the bot can't see them so its guesses stay blind. Nothing was read or saved.";
+const EVALBOT_PRIVATE_ONLY = "The eval bot can only save under private/. It reads the main library but never changes it. Nothing was saved.";
 const isMissing = (err) => err?.code === "ENOENT" || /^No file at/.test(err?.message ?? "");
 
 export function createLibrary({ backend, role }) {
   if (!ROLES.includes(role)) throw new Error(`Role must be one of: ${ROLES.join(", ")}`);
-  const writer = () => {
-    if (role !== "writer") throw new Error(READ_ONLY);
+  // The eval bot is refused answers/ here, in code, before any call reaches Google. Google
+  // refuses it too, because the bot is never a member of the answers drive.
+  const blind = (p) => {
+    if (role === "evalbot" && isAnswersPath(p)) throw new Error(EVALBOT_NO_ANSWERS);
+  };
+  const writer = (p) => {
+    blind(p);
+    if (role === "reader") throw new Error(READ_ONLY);
+    if (role === "evalbot" && !isPrivatePath(p)) throw new Error(EVALBOT_PRIVATE_ONLY);
   };
 
   // Saves the new text, then reads it back. Append and edit change a file the person never
@@ -20,19 +31,26 @@ export function createLibrary({ backend, role }) {
 
   return {
     role,
-    canWrite: role === "writer",
-    list: async (p) => backend.list(p ?? ""),
-    read: async (p) => backend.read(p),
+    canWrite: role !== "reader",
+    list: async (p) => {
+      blind(p);
+      return backend.list(p ?? "");
+    },
+    read: async (p) => {
+      blind(p);
+      return backend.read(p);
+    },
     search: async (q, limit) => {
       if (!q || !q.trim()) throw new Error("Search needs some words");
-      return backend.search(q.trim(), limit);
+      const hits = await backend.search(q.trim(), limit);
+      return role === "evalbot" ? hits.filter((h) => !isAnswersPath(h.path)) : hits;
     },
     write: async (p, content) => {
-      writer();
+      writer(p);
       return backend.write(p, content);
     },
     append: async (p, text) => {
-      writer();
+      writer(p);
       if (!text) throw new Error("Nothing to add");
       let current = "";
       let created = false;
@@ -47,7 +65,7 @@ export function createLibrary({ backend, role }) {
       return { ...result, added: Buffer.byteLength(text, "utf8"), created };
     },
     edit: async (p, find, replace) => {
-      writer();
+      writer(p);
       if (!find) throw new Error("Say which text to change");
       const current = await backend.read(p);
       const count = current.split(find).length - 1;
