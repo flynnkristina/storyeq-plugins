@@ -27,7 +27,7 @@ If she asks what the library can do ("what's in my library"), list each skill's 
 - If two fit, name both and ask which.
 - If none fits, say so in one line. Then search `judgments/` for rules on the topic and say which are confirmed and which are not yet confirmed.
 
-Start your reply with one line naming the skill, for example: "Using the debrief skill from your library."
+Start your first reply with one line naming the skill, for example: "Using the debrief skill from your library." Say it once only: not again after reading the skill's file or after any later step.
 
 ## 4. Follow it
 
