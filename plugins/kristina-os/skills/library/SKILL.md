@@ -45,7 +45,7 @@ Read the skill's file and follow its steps. It names the rules and context it ne
 
 Anything the library marks private stays with her. It never goes into work for a client or a team.
 
-Files only she may see (blind spots, limiting beliefs, family, anything she marks "only me") live under `private/`. The connector keeps `private/` in a separate drive. Two accounts can open it: her own writer connection, and the eval bot, which files its guesses there and so can read and write everything in `private/`. The read-only connection never sees it. Family names and anything about her childhood go in `private/`, never the main library, which the eval bot also reads.
+Files only she may see (blind spots, limiting beliefs, family, anything she marks "only me") live under `private/`. The connector keeps `private/` in a separate drive. Two accounts can open it: her own writer connection, and the eval bot, which files its guesses there and so can read and write everything in `private/`. The read-only connection never sees it. Anything that belongs in `private/` goes there, never the main library, which the eval bot also reads.
 
 - To file something private, write it under `private/`. Never put private material anywhere else in the library, even for a moment.
 - If a `private/` read or write is refused because the private drive isn't connected, say so plainly and offer to connect it ("connect my private drive", in the setup skill). Don't save it anywhere else instead.
