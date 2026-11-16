@@ -112,3 +112,19 @@ test("search also finds a file written moments ago, before Drive has indexed it"
   const d = new DriveBackend({ driveId: DRIVE, client });
   assert.deepEqual((await d.search("stamp 123")).map((h) => h.path), ["skills/new.md"]);
 });
+
+test("membership check: asks for the drive itself; 404 and 403 mean no, anything else is an error", async () => {
+  const answer = (status) => ({
+    async request(opts) {
+      assert.match(opts.url, /\/drives\/D1$/, "asks for the drive, never lists a folder");
+      if (status === 200) return { data: { id: "D1" } };
+      const err = new Error(`status ${status}`);
+      err.response = { status, data: { error: { message: `status ${status}` } } };
+      throw err;
+    },
+  });
+  assert.equal(await new DriveBackend({ driveId: "D1", client: answer(200) }).canOpenDrive(), true);
+  assert.equal(await new DriveBackend({ driveId: "D1", client: answer(404) }).canOpenDrive(), false);
+  assert.equal(await new DriveBackend({ driveId: "D1", client: answer(403) }).canOpenDrive(), false);
+  await assert.rejects(new DriveBackend({ driveId: "D1", client: answer(500) }).canOpenDrive(), /Couldn't check access/);
+});

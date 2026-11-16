@@ -275,7 +275,7 @@ export async function connectAnswers({ drive, env = process.env } = {}) {
       throw new Error("An eval bot is connected on this Mac, but its key can't be read, so it can't be checked that it's kept out of the answers drive. Disconnect the eval bot or connect it again first. Nothing was changed.");
     }
     const seen = await sharedDrives(botCreds);
-    const opened = await new DriveBackend({ driveId: ans.id, credentials: botCreds, readOnly: true }).list("").then(() => true, () => false);
+    const opened = await new DriveBackend({ driveId: ans.id, credentials: botCreds, readOnly: true }).canOpenDrive();
     if (opened || seen.some((d) => d.id === ans.id)) {
       throw new Error(`The eval bot (${evalbot.account}) can open "${ans.name}", so it could read the answers. Remove it from that drive's members first. Nothing was changed.`);
     }
@@ -364,7 +364,7 @@ export async function connectEvalBot({ keyFile, env = process.env }) {
   // Google's own answer, not just the drive list: the bot must not be able to open the
   // answers drive at all.
   if (settings.answersDriveId) {
-    const opened = await new DriveBackend({ driveId: settings.answersDriveId, credentials, readOnly: true }).list("").then(() => true, () => false);
+    const opened = await new DriveBackend({ driveId: settings.answersDriveId, credentials, readOnly: true }).canOpenDrive();
     if (opened) throw new Error(`Google let the eval bot open "${settings.answersDriveName}". Remove it from that drive's members, then try again. Nothing was changed.`);
   }
   await new DriveBackend({ driveId: settings.driveId, credentials, readOnly: true }).list("");

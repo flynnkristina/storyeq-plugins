@@ -71,7 +71,10 @@ const stored = (account, service = SERVICE) => {
 
 // ---------- fake Google ----------
 
-// accounts: email -> { sees: [drive] (what /drives lists), opens: [driveId] (what files.list allows) }
+// accounts: email -> { sees: [drive] (what /drives lists), opens: [driveId] (drives it's a member of) }
+// Modelled on real Google, checked live 15 Nov 2026 with a non-member account: GET /drives/{id}
+// says 404 "Shared drive not found", but files.list on that drive's top folder comes back as an
+// EMPTY LIST, not an error. So listing is never a membership test; the drive request is.
 let accounts = {};
 const realGetClient = GoogleAuth.prototype.getClient;
 
@@ -81,10 +84,15 @@ function fakeClient(email) {
       const acct = accounts[email];
       if (!acct) throw Object.assign(new Error("invalid_grant"), { response: { status: 401, data: { error: { message: "unknown account" } } } });
       if (url.endsWith("/drives")) return { data: { drives: acct.sees } };
-      if (url.endsWith("/files")) {
-        if (!acct.opens.includes(params.driveId)) {
-          throw Object.assign(new Error("not found"), { response: { status: 404, data: { error: { message: `Shared drive not found: ${params.driveId}` } } } });
+      const one = url.match(/\/drives\/([^/?]+)$/);
+      if (one) {
+        if (!acct.opens.includes(one[1])) {
+          throw Object.assign(new Error("not found"), { response: { status: 404, data: { error: { message: `Shared drive not found: ${one[1]}` } } } });
         }
+        return { data: { id: one[1] } };
+      }
+      if (url.endsWith("/files")) {
+        if (!acct.opens.includes(params.driveId)) return { data: { files: [] } };
         return { data: { files: [{ id: `${params.driveId}-top`, name: "top.md", mimeType: "text/markdown" }] } };
       }
       throw new Error(`fake Google: unexpected request ${url}`);
