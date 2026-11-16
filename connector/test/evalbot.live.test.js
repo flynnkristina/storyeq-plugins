@@ -32,7 +32,9 @@ test("live: the eval bot is refused answers/, by the code and by Google", { skip
   // Straight at Google, skipping every check in the code: the bot must not open the drive.
   const credentials = await credentialsFor(bot, env);
   const direct = new DriveBackend({ driveId: writer.answersDriveId, credentials, readOnly: true });
-  await assert.rejects(direct.list(""), /Google|404|not found/i);
+  assert.equal(await direct.canOpenDrive(), false, "Google says the bot isn't a member");
+  // A file the writer saved there must be invisible to the bot.
+  await assert.rejects(direct.read("_tests/connected-check.md"), /No file|Google/);
   // And Google refuses the bot's write to the library, even if the code were bypassed.
   const library = new DriveBackend({ driveId: writer.driveId, credentials });
   await assert.rejects(library.write(`_tests/evalbot-should-fail-${Date.now()}.md`, "x"), /Google/);

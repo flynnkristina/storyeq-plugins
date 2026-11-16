@@ -64,6 +64,23 @@ export class DriveBackend {
     }
   }
 
+  // Whether this account can open the Shared Drive at all. Asks Google for the drive itself:
+  // a member gets it back, anyone else gets "not found" (404) or "requires membership" (403).
+  // Listing a folder is NOT a membership test: Google answers a non-member's "files in this
+  // folder" with an empty list instead of an error. Any other failure is thrown, never read as
+  // "can't open", so a check built on this fails closed.
+  async canOpenDrive() {
+    if (!this.client) this.client = await this.auth.getClient();
+    try {
+      await this.client.request({ url: `${API}/drives/${this.driveId}`, params: { fields: "id" } });
+      return true;
+    } catch (err) {
+      const status = err.response?.status;
+      if (status === 404 || status === 403) return false;
+      throw new Error(`Couldn't check access to that Shared Drive: ${err.response?.data?.error?.message ?? err.message}`);
+    }
+  }
+
   async children(folderId) {
     const files = [];
     let pageToken;

@@ -17,7 +17,7 @@ import {
   evalBotStatus, writeEvalSessionFile, status, disconnect, credentialsFor, evalbotAccount,
 } from "./setup.js";
 
-export const VERSION = "0.8.0";
+export const VERSION = "0.8.1";
 const NOT_SET_UP = "Your library isn't set up on this machine yet. Say \"set up my library\" and I'll find your key and connect it.";
 const EVALBOT_NOT_SET_UP = "The eval bot isn't connected on this Mac yet. Connect it from your own session first (say \"connect the eval bot\").";
 const READER_NO_PRIVATE = "Private files are open only to the library's own writer connection. This connection is read-only, so it can't see them.";
