@@ -48,7 +48,7 @@ Call `read_library_file` on `skills/INDEX.md` and list the skills in it, so she 
 
 ## Connect the private drive
 
-Her private files (anything under `private/`) live in a second Shared Drive that only the writer account can open. Until it's connected, `private/` files are refused, never saved in the main library.
+Her private files (anything under `private/`) live in a second Shared Drive. Her writer account opens it; once the eval bot is connected, the eval bot can read and write it too (see "Connect the eval bot"). Until it's connected, `private/` files are refused, never saved in the main library.
 
 Call `connect_private_drive`. It uses the key already in the Keychain and picks the drive with "private" in its name.
 
