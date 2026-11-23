@@ -6,7 +6,7 @@
 #   bash scripts/put-secrets.sh <wrangler config> one NAME  just one value, e.g. ACCESS_CLIENT_SECRET
 #
 # "keys" reads the keys the plugin already keeps in the Keychain and hands each one straight to
-# Cloudflare. "access" asks for each value with typing hidden, then makes the cookie key itself.
+# Cloudflare. "access" asks for each value with typing hidden.
 # Prints only the names of what it set. Run it yourself, in your own terminal.
 set -euo pipefail
 CONFIG="${1:?say which wrangler config, e.g. wrangler.storyeq-test.jsonc}"
@@ -27,14 +27,19 @@ ask() {
 put() { "$WRANGLER" secret put "$1" -c "$CONFIG" >/dev/null 2>&1 && echo "set $1" || { echo "FAILED to set $1"; exit 1; }; }
 
 from_keychain() {
+  # Stops before anything reaches Cloudflare if the Keychain item isn't there, so an empty value
+  # is never uploaded and "set ..." is never printed for something that wasn't set.
+  /usr/bin/security find-generic-password -s "$1" -a "$2" >/dev/null 2>&1 || { echo "No Keychain item \"$1\" for $2, stopping." >&2; exit 1; }
   /usr/bin/security find-generic-password -s "$1" -a "$2" -w 2>/dev/null | /usr/bin/base64 -D
 }
 
 case "$WHAT" in
   keys)
-    from_keychain "StoryEQ library key" "$PLUGIN" | put WRITER_KEY
-    from_keychain "StoryEQ library key (reader)" "$PLUGIN" | put READER_KEY
-    from_keychain "StoryEQ library key" "$PLUGIN:evalbot" | put EVALBOT_KEY
+    for ITEM in "WRITER_KEY|StoryEQ library key|$PLUGIN" "READER_KEY|StoryEQ library key (reader)|$PLUGIN" "EVALBOT_KEY|StoryEQ library key|$PLUGIN:evalbot"; do
+      IFS='|' read -r NAME SERVICE ACCOUNT <<<"$ITEM"
+      /usr/bin/security find-generic-password -s "$SERVICE" -a "$ACCOUNT" >/dev/null 2>&1 || { echo "No Keychain item \"$SERVICE\" for $ACCOUNT, stopping. Nothing was set for $NAME."; exit 1; }
+      from_keychain "$SERVICE" "$ACCOUNT" | put "$NAME"
+    done
     ;;
   access)
     for NAME in ACCESS_CLIENT_ID ACCESS_CLIENT_SECRET ACCESS_TOKEN_URL ACCESS_AUTHORIZATION_URL ACCESS_JWKS_URL; do
@@ -42,7 +47,6 @@ case "$WHAT" in
       printf '%s' "$VALUE" | put "$NAME"
       unset VALUE
     done
-    /usr/bin/openssl rand -hex 32 | tr -d '\n' | put COOKIE_ENCRYPTION_KEY
     ;;
   one)
     NAME="${3:?say which secret, e.g. ACCESS_CLIENT_SECRET}"

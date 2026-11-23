@@ -19,6 +19,9 @@ import { ServiceAccountClient, parseKey } from "./google-client";
 
 export type RoleName = "team" | "leader" | "evalbot";
 
+// What a sign-in stores with each grant (encrypted by the OAuth library). Nothing else is kept.
+export type Props = { email: string; name: string; login: string };
+
 const SCOPE_WRITE = "https://www.googleapis.com/auth/drive";
 const SCOPE_READ = "https://www.googleapis.com/auth/drive.readonly";
 
@@ -41,6 +44,34 @@ export function paths(env: Env): Record<RoleName, string> {
   };
 }
 
+const RESERVED = ["/authorize", "/callback", "/token", "/register", "/.well-known"];
+
+// Refuses a deploy whose address settings could overlap each other or a sign-in route, so one
+// address can never pick up another's traffic.
+export function checkPaths(env: Env) {
+  const all = Object.values(paths(env));
+  for (const p of all) {
+    if (p === "/" || !/^\/[a-z0-9-]+$/.test(p)) throw new Error(`Address "${p}" must be one lowercase word, like /team.`);
+    if (RESERVED.some((r) => p === r || p.startsWith(`${r}/`) || r.startsWith(p))) throw new Error(`Address "${p}" clashes with a sign-in route.`);
+  }
+  if (new Set(all).size !== all.length) throw new Error("The three addresses must be different.");
+}
+
+// Sign-in return addresses a client may register. Claude's own by default; set ALLOWED_REDIRECTS
+// (comma-separated, exact) to change them. A loopback address on any port is allowed for apps on
+// the person's own computer, and the consent page warns when one is used.
+const DEFAULT_REDIRECTS = ["https://claude.ai/api/mcp/auth_callback", "https://claude.com/api/mcp/auth_callback"];
+export function allowedRedirect(env: Env, uri: string) {
+  const exact = list(env.ALLOWED_REDIRECTS).length ? (env.ALLOWED_REDIRECTS ?? "").split(",").map((s) => s.trim()).filter(Boolean) : DEFAULT_REDIRECTS;
+  if (exact.includes(uri)) return true;
+  try {
+    const u = new URL(uri);
+    return u.protocol === "http:" && (u.hostname === "localhost" || u.hostname === "127.0.0.1") && !u.username && !u.password;
+  } catch {
+    return false;
+  }
+}
+
 export function baseUrl(env: Env) {
   const u = (env.BASE_URL ?? "").trim().replace(/\/+$/, "");
   if (!u) throw new Error("BASE_URL isn't set on this deploy.");
@@ -60,7 +91,7 @@ export function roleForResource(env: Env, resource: string | undefined): RoleNam
 // Whether this person may use this address. Fails closed: an unset list lets nobody in.
 export function mayUse(env: Env, role: RoleName, email: string | undefined): boolean {
   const e = (email ?? "").trim().toLowerCase();
-  if (!e || !e.includes("@")) return false;
+  if (!e || (e.match(/@/g) ?? []).length !== 1) return false;
   const leaders = list(env.LEADER_EMAILS);
   if (role === "leader" || role === "evalbot") return leaders.includes(e);
   const domain = e.split("@").pop()!;

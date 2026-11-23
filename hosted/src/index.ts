@@ -12,8 +12,7 @@ import { OAuthAuthorizationServer, OAuthResourceServer } from "@cloudflare/worke
 import { createMcpHandler, getMcpAuthContext } from "agents/mcp/server";
 import { handleAccessRequest } from "./access-handler";
 import { createServer } from "./library-mcp";
-import { baseUrl, mayUse, paths, resourceFor, type RoleName } from "./roles";
-import type { Props } from "./workers-oauth-utils";
+import { allowedRedirect, baseUrl, checkPaths, mayUse, paths, resourceFor, type Props, type RoleName } from "./roles";
 
 const ROLES: RoleName[] = ["team", "leader", "evalbot"];
 
@@ -29,6 +28,7 @@ export function authServer(env: Env) {
 
 function build(env: Env): Built {
   if (built) return built;
+  checkPaths(env);
   const issuer = baseUrl(env);
   const auth = new OAuthAuthorizationServer<Env>({
     issuer,
@@ -36,6 +36,18 @@ function build(env: Env): Built {
     authorizeEndpoint: `${issuer}/authorize`,
     tokenEndpoint: `${issuer}/token`,
     clientRegistrationEndpoint: `${issuer}/register`,
+    // Only Claude's own sign-in return addresses may register (plus a local one, for Claude Code
+    // and similar apps on the person's own computer). Anything else is refused before it's stored.
+    clientRegistrationCallback: ({ clientMetadata }) => {
+      const uris = clientMetadata.redirect_uris;
+      if (!Array.isArray(uris) || uris.length === 0 || !uris.every((u) => typeof u === "string" && allowedRedirect(env, u))) {
+        return { description: "This connector only accepts sign-ins from Claude.", status: 403, code: "access_denied" };
+      }
+      const name = clientMetadata.client_name;
+      if (name !== undefined && (typeof name !== "string" || name.length > 80)) {
+        return { description: "client_name must be text of 80 characters or fewer." };
+      }
+    },
   });
 
   const resources = ROLES.map((role) => {

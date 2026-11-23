@@ -15,6 +15,8 @@ interface Env {
   MAIN_DRIVE_ID: string;
   PRIVATE_DRIVE_ID?: string;
   ANSWERS_DRIVE_ID?: string;
+  ACCESS_ISSUER?: string; // only if Access's issuer isn't the token endpoint minus "/token"
+  ALLOWED_REDIRECTS?: string; // comma-separated; defaults to Claude's own sign-in addresses
 
   // Secrets
   ACCESS_CLIENT_ID: string;
@@ -22,7 +24,7 @@ interface Env {
   ACCESS_TOKEN_URL: string;
   ACCESS_AUTHORIZATION_URL: string;
   ACCESS_JWKS_URL: string;
-  COOKIE_ENCRYPTION_KEY: string;
+  COOKIE_ENCRYPTION_KEY?: string; // no longer used (sign-in cookies are the OAuth library's own); harmless if set
   READER_KEY?: string;
   WRITER_KEY?: string;
   EVALBOT_KEY?: string;

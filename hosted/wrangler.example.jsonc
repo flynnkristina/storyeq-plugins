@@ -9,7 +9,7 @@
   "compatibility_flags": ["nodejs_compat"],
   "alias": { "google-auth-library": "./src/no-google-auth.js" },
   "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "<from: npx wrangler kv namespace create OAUTH_KV>" }],
-  "observability": { "enabled": true },
+  "observability": { "enabled": false },
   "vars": {
     "BASE_URL": "https://library-connector.<your-subdomain>.workers.dev",
     "LIBRARY_NAME": "Library",
