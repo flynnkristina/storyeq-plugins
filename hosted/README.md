@@ -56,6 +56,16 @@ The Drive code is the plugin's own (`../connector/src/library.js`, `backends/spl
 
 Wrangler 4.86+ (the one installed with Homebrew works; the npm one needs Node 22).
 
+## What Claude is told to do first
+
+Each address sends Claude its own instructions when it connects (`src/instructions.ts`): start with
+`START_HERE.md` in the library (or `ALWAYS.md` then `skills/INDEX.md`), the saving and private
+rules for the leader's address, read only for the team's, answers/ never for the eval bot. Set
+`LEADER_NAME` and `LIBRARY_NAME` per deploy. **Tested 2026-11-23: Claude Code uses these, but
+Claude's chat doesn't pass a custom connection's instructions to the model**, so the same pointer
+also sits in the read, list and search tool descriptions, and the organisation's own instructions
+(set by a Team Owner) carry the main copy.
+
 ## Checks
 
 - `npm run test:live` runs the three roles against a real test library from this Mac (keys read
