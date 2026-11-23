@@ -6,7 +6,7 @@ import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { libraryFor, type RoleName } from "./roles";
 
-export const VERSION = "0.1.0";
+export const VERSION = "0.2.0";
 
 const text = (value: unknown) => ({
   content: [{ type: "text" as const, text: typeof value === "string" ? value : JSON.stringify(value, null, 2) }],
@@ -72,7 +72,7 @@ export function createServer(env: Env, role: RoleName, email: string) {
         limit: z.number().int().min(1).max(50).optional().describe("Most files to return (default 10)"),
       }),
     },
-    wrap(async ({ query, limit }: { query: string; limit?: number }) => lib().search(query, limit ?? 10)),
+    wrap(async ({ query, limit }: { query: string; limit?: number }) => lib().search(query, Math.min(limit ?? 10, role === "team" ? 10 : 50))),
   );
 
   if (role === "team") return server;

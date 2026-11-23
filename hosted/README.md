@@ -16,18 +16,26 @@ The Drive code is the plugin's own (`../connector/src/library.js`, `backends/spl
 
 ## How sign-in works
 
-- Cloudflare's `remote-mcp-cf-access` starter (`src/access-handler.ts`,
-  `src/workers-oauth-utils.ts`), changed in three places: it uses the
-  three-address server, it checks the person may use the address they asked for **before** a
-  token is issued, and it answers a malformed request with a plain 400.
+- Sign-in runs on the OAuth library's own consent and upstream helpers (`src/access-handler.ts`).
+  Every step is bound to the browser that started it with a `__Host-` cookie, so a sign-in one
+  person starts can't be finished by anyone else's browser, and each step works once.
+- The consent page names the app asking, the connection it's asking for (team, leader or eval
+  bot, in plain words) and, in large type, where access will be sent. It can't be framed.
+- **Only Claude's own sign-in return addresses can register** (`ALLOWED_REDIRECTS`, defaulting to
+  claude.ai and claude.com, plus a loopback address for apps on the person's own computer, which
+  the consent page warns about). Anything else is refused before it's stored.
 - People sign in through **Cloudflare Access** (an "Access for SaaS" OIDC app), with whatever
   login methods that Access account has (Google, emailed code). The Worker never sees a password.
+  Access's ID token is checked in full: RS256 signature against Access's keys (cached five
+  minutes), issuer, audience, expiry, nonce, and exactly one well-formed email.
 - **Each address is its own OAuth resource.** A token issued for `/team` is refused at the other
   two, so a team member's sign-in can't be replayed against the leader's address.
-- **Who may use each address is checked twice:** at sign-in (`access-handler.ts`, `/callback`) and
-  on every request (`src/index.ts`). An unset list lets nobody in.
+- **Who may use each address is checked twice:** at sign-in, before any token exists, and on every
+  request (`src/index.ts`). An unset list lets nobody in.
 - The Access app's own policy is a third gate in front of both: only emails it allows reach the
   Worker at all.
+- The address settings are checked at start-up: three different single words, none clashing with
+  a sign-in route.
 
 ## Setting up a deploy
 
@@ -42,8 +50,8 @@ The Drive code is the plugin's own (`../connector/src/library.js`, `backends/spl
    - `bash scripts/put-secrets.sh wrangler.<deploy>.jsonc keys` copies the three Google keys
      from this Mac's Keychain (the plugin's own items) straight to Cloudflare.
    - `bash scripts/put-secrets.sh wrangler.<deploy>.jsonc access` asks for the Access app's
-     client ID, client secret, token, authorization and key endpoints (typing hidden), and makes
-     the cookie key itself. `... one NAME` sets a single one.
+     client ID, client secret, token, authorization and key endpoints (typing hidden).
+     `... one NAME` sets a single one.
 6. In Claude: Plugins > Add > Add custom connector, one per address.
 
 Wrangler 4.86+ (the one installed with Homebrew works; the npm one needs Node 22).
@@ -54,17 +62,22 @@ Wrangler 4.86+ (the one installed with Homebrew works; the npm one needs Node 22
   from the Keychain into memory, never printed): what each can and can't do, and the sign-in rules.
 - `wrangler tail -c wrangler.<deploy>.jsonc` shows each request live.
 
-## Before it holds a client's keys
+## Security review
 
-Both Cloudflare starters say they are demos and need a security review before production. Things
-to look at, beyond the starter itself: the `mayUse` rules in `src/roles.ts`; that every address's
-token audience is enforced (`OAuthResourceServer`); the consent cookie and CSRF handling in
-`src/workers-oauth-utils.ts`; that no key, token or client secret is ever logged or returned
-(`src/google-client.ts`); and who can register OAuth clients (`/register` is open, as MCP clients
-need it).
+Reviewed 2026-11-23 (independent review, not the author). Fixed in 0.2.0: sign-in not bound to the
+browser (the serious one), open client registration, incomplete ID-token checks, error pages that
+echoed details, an unused Access token kept in each grant, plus hardening (no-store on sign-in
+pages, address checks, one-@ emails, a capped team search, a bad key no longer cached, the secrets
+script stopping cleanly on a missing Keychain item). Held from the start: the walls between the
+three addresses, the eval bot's blindness to answers/, and no key or secret logged or returned.
+
+Still open, as design choices: the eval bot can read and write anywhere under `private/`, not only
+a folder of its own; `observability` stays off in production deploys, since request logs record
+sign-in URLs (single-use codes, low risk).
 
 ## Credit
 
-`src/access-handler.ts` and `src/workers-oauth-utils.ts` start from Cloudflare's
+The first version started from Cloudflare's
 [remote-mcp-cf-access](https://github.com/cloudflare/ai/tree/main/demos/remote-mcp-cf-access)
-demo (commit 34a8f4c), MIT licensed; the licence is in `src/LICENSE-cloudflare-starter`.
+demo (commit 34a8f4c), MIT licensed; the licence is in `src/LICENSE-cloudflare-starter`. Version
+0.2.0 replaced its sign-in code with the OAuth library's own helpers.

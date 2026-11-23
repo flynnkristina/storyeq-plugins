@@ -80,13 +80,12 @@ export class ServiceAccountClient {
 
   async #accessToken(): Promise<string> {
     if (this.#token && this.#token.expiresAt - 60_000 > Date.now()) return this.#token.value;
-    this.#signer ??= crypto.subtle.importKey(
-      "pkcs8",
-      pemToPkcs8(this.#key.private_key),
-      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-      false,
-      ["sign"],
-    );
+    this.#signer ??= crypto.subtle
+      .importKey("pkcs8", pemToPkcs8(this.#key.private_key), { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"])
+      .catch((err) => {
+        this.#signer = undefined; // a bad key isn't remembered; the next call tries again
+        throw new Error("The service account key on this deploy couldn't be loaded.");
+      });
     const now = Math.floor(Date.now() / 1000);
     const header = b64urlText(JSON.stringify({ alg: "RS256", typ: "JWT" }));
     const claims = b64urlText(
