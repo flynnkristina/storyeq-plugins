@@ -6,6 +6,7 @@ interface Env {
   // Settings (vars)
   BASE_URL: string; // e.g. https://library.example.workers.dev
   LIBRARY_NAME?: string;
+  LEADER_NAME?: string; // used in the instructions each address sends Claude
   TEAM_PATH?: string;
   LEADER_PATH?: string;
   EVALBOT_PATH?: string;

@@ -12,6 +12,7 @@
   "observability": { "enabled": false },
   "vars": {
     "BASE_URL": "https://library-connector.<your-subdomain>.workers.dev",
+    "LEADER_NAME": "the leader",
     "LIBRARY_NAME": "Library",
     "TEAM_PATH": "/team",
     "LEADER_PATH": "/leader",

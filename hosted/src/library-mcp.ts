@@ -5,8 +5,9 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { libraryFor, type RoleName } from "./roles";
+import { instructionsFor } from "./instructions";
 
-export const VERSION = "0.2.0";
+export const VERSION = "0.3.0";
 
 const text = (value: unknown) => ({
   content: [{ type: "text" as const, text: typeof value === "string" ? value : JSON.stringify(value, null, 2) }],
@@ -32,9 +33,12 @@ const LABEL: Record<RoleName, string> = {
 };
 
 export function createServer(env: Env, role: RoleName, email: string) {
-  const server = new McpServer({ name: "library", version: VERSION });
+  const server = new McpServer({ name: "library", version: VERSION }, { instructions: instructionsFor(env, role) });
   const name = env.LIBRARY_NAME ?? "library";
   const lib = () => libraryFor(env, role);
+  // Claude's chat doesn't pass a custom connection's own instructions to the model (tested
+  // 2026-11-23), but it always reads tool descriptions, so the pointer rides there too.
+  const start = role === "evalbot" ? "" : ` Before any work that uses the ${name}, read START_HERE.md first (or, if it's missing, ALWAYS.md then skills/INDEX.md).`;
 
   server.registerTool(
     "library_status",
@@ -48,7 +52,7 @@ export function createServer(env: Env, role: RoleName, email: string) {
   server.registerTool(
     "list_library",
     {
-      description: `List the files and folders in the ${name}, or inside one folder of it.`,
+      description: `List the files and folders in the ${name}, or inside one folder of it.${start}`,
       inputSchema: z.object({ folder: z.string().optional().describe("Folder inside the library, e.g. skills. Leave empty for the top.") }),
     },
     wrap(async ({ folder }: { folder?: string }) => lib().list(folder)),
@@ -57,7 +61,7 @@ export function createServer(env: Env, role: RoleName, email: string) {
   server.registerTool(
     "read_library_file",
     {
-      description: `Read one file from the ${name}.`,
+      description: `Read one file from the ${name}.${start}`,
       inputSchema: z.object({ path: z.string().describe("Path inside the library, e.g. skills/INDEX.md") }),
     },
     wrap(async ({ path }: { path: string }) => lib().read(path)),
@@ -66,7 +70,7 @@ export function createServer(env: Env, role: RoleName, email: string) {
   server.registerTool(
     "search_library",
     {
-      description: `Search the ${name} for words or a phrase. Returns matching files with the lines that matched.`,
+      description: `Search the ${name} for words or a phrase. Returns matching files with the lines that matched.${start}`,
       inputSchema: z.object({
         query: z.string().describe("Words to look for"),
         limit: z.number().int().min(1).max(50).optional().describe("Most files to return (default 10)"),
