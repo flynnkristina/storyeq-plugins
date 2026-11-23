@@ -1,0 +1,26 @@
+// Copy to wrangler.<deploy>.jsonc (ignored by git), fill in, then:
+//   npx wrangler deploy -c wrangler.<deploy>.jsonc
+// Keys and sign-in secrets are NOT set here: see README.md, "Secrets".
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "library-connector",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-03-10",
+  "compatibility_flags": ["nodejs_compat"],
+  "alias": { "google-auth-library": "./src/no-google-auth.js" },
+  "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "<from: npx wrangler kv namespace create OAUTH_KV>" }],
+  "observability": { "enabled": true },
+  "vars": {
+    "BASE_URL": "https://library-connector.<your-subdomain>.workers.dev",
+    "LIBRARY_NAME": "Library",
+    "TEAM_PATH": "/team",
+    "LEADER_PATH": "/leader",
+    "EVALBOT_PATH": "/evalbot",
+    "LEADER_EMAILS": "leader@example.com",
+    "TEAM_DOMAINS": "example.com",
+    "TEAM_EMAILS": "",
+    "MAIN_DRIVE_ID": "<main Shared Drive id>",
+    "PRIVATE_DRIVE_ID": "<private Shared Drive id>",
+    "ANSWERS_DRIVE_ID": "<answers Shared Drive id>"
+  }
+}
