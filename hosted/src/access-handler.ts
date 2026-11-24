@@ -148,6 +148,8 @@ async function afterAccess(request: Request, env: Env, params: URLSearchParams) 
 
   const res = await fetch(env.ACCESS_TOKEN_URL, {
     method: "POST",
+    // Access reports a refused exchange by redirecting to our own /callback; don't follow it, read it.
+    redirect: "manual",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       grant_type: "authorization_code",
@@ -159,7 +161,13 @@ async function afterAccess(request: Request, env: Env, params: URLSearchParams) 
     }),
   });
   if (!res.ok) {
-    console.error("Access token exchange failed with status", res.status);
+    let reason = "";
+    try {
+      const loc = res.headers.get("location");
+      if (loc) reason = new URL(loc).searchParams.get("error_description") ?? "";
+      else reason = ((await res.clone().json()) as { error_description?: string }).error_description ?? "";
+    } catch {}
+    console.error("Access token exchange failed with status", res.status, reason);
     return text("Cloudflare Access didn't complete the sign-in. Start again from Claude.", 502);
   }
   const body = (await res.json().catch(() => ({}))) as { id_token?: string };
