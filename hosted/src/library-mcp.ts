@@ -46,7 +46,16 @@ export function createServer(env: Env, role: RoleName, email: string) {
       description: `Check that the ${name} is reachable through this hosted connection, and which kind of connection it is.`,
       inputSchema: z.object({}),
     },
-    wrap(async () => ({ connected: true, connection: LABEL[role], signedInAs: email, version: VERSION })),
+    wrap(async () => {
+      const reach = async (folder: string) => {
+        try { await lib().list(folder); return "reachable"; } catch (e) { return `NOT reachable (${(e as Error)?.message ?? "error"})`; }
+      };
+      const status: Record<string, unknown> = { connected: true, connection: LABEL[role], signedInAs: email, version: VERSION };
+      if (role !== "team") status.privateDrive = `private/ (the private drive): ${await reach("private")}`;
+      if (role === "leader") status.answersDrive = `answers/ (the answers drive): ${await reach("answers")}`;
+      if (role === "evalbot") status.answersDrive = "answers/ (the answers drive): never opened by the eval bot";
+      return status;
+    }),
   );
 
   server.registerTool(
