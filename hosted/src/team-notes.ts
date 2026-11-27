@@ -173,6 +173,6 @@ export async function sendNote(
     next:
       input.kind === "rule"
         ? `${leader} sees it as a card the next time they do their review cards. This connection can't open it again.`
-        : `${leader} sees it first, the next time they do their review cards or debrief. For finished work, also draft the email to ${leader} the team member would send anyway, from their own email, for them to send. This connection can't open the note again.`,
+        : `${leader} sees it first, the next time they do their review cards or debrief. For finished work, also draft the email to ${leader} the team member would send anyway, from their own email, and leave it as a draft for them to send. Never send it yourself. This connection can't open the note again.`,
   };
 }

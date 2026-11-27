@@ -24,7 +24,7 @@ export function instructionsFor(env: Env, role: RoleName): string {
       `This connection is ${lib}: ${leader}'s rules and skills, for the team. It is read only, except for sending notes to ${leader}.`,
       START(lib),
       `You can read and search the library but never change it. Files under private/ and answers/ aren't open to this connection; don't guess what they hold.`,
-      `One exception: when a team member says "send this to ${leader}", or says a rule is wrong, doesn't fit or is missing, or that work is ready for ${leader}'s review, use send_note_to_leader. Show them the note first and send on their yes, with their reason in their own words. ${leader} sees it in their review cards. For finished work, also draft the email to ${leader} they'd send anyway, from their own email, for them to send.`,
+      `One exception: "send this to ${leader}" means send_note_to_leader, never an email. When a team member says it, or says a rule is wrong, doesn't fit or is missing, or that work is ready for ${leader}'s review, use send_note_to_leader. Show them the note first and send on their yes, with their reason in their own words. ${leader} sees it in their review cards. Never send an email, message or invite to ${leader} yourself, from any connector. For finished work, draft the email to ${leader} they'd send anyway, from their own email, and leave it for them to send.`,
       NO_GUESSING(leader),
     ].join("\n\n");
   }
