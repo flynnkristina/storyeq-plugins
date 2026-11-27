@@ -1,6 +1,6 @@
 {
   "name": "storyeq-hosted-library",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "The library connector as a hosted Cloudflare Worker, behind Cloudflare Access. One deploy, three addresses: /team (read-only), /leader (the leader's writer), /evalbot (the eval bot).",
   "type": "module",
@@ -9,7 +9,8 @@
     "dev": "wrangler dev",
     "test": "node --test test/",
     "type-check": "tsc --noEmit",
-    "test:live": "esbuild test/live-drive.ts --bundle --platform=node --format=esm --alias:google-auth-library=./src/no-google-auth.js --outfile=.wrangler/live-drive.mjs --log-level=warning && node .wrangler/live-drive.mjs"
+    "test:live": "esbuild test/live-drive.ts --bundle --platform=node --format=esm --alias:google-auth-library=./src/no-google-auth.js --outfile=.wrangler/live-drive.mjs --log-level=warning && node .wrangler/live-drive.mjs",
+    "test:unit": "esbuild test/team-notes.unit.ts --bundle --platform=node --format=esm --alias:google-auth-library=./src/no-google-auth.js --outfile=.wrangler/team-notes.unit.mjs --log-level=warning && node .wrangler/team-notes.unit.mjs"
   },
   "dependencies": {
     "@cloudflare/workers-oauth-provider": "^1.2.4",

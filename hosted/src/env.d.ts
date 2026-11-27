@@ -18,6 +18,7 @@ interface Env {
   ANSWERS_DRIVE_ID?: string;
   ACCESS_ISSUER?: string; // only if Access's issuer isn't the token endpoint minus "/token"
   ALLOWED_REDIRECTS?: string; // comma-separated; defaults to Claude's own sign-in addresses
+  NOTES_FOLDER?: string; // where team notes go inside the private drive; default inbox/team
 
   // Secrets
   ACCESS_CLIENT_ID: string;
@@ -29,4 +30,5 @@ interface Env {
   READER_KEY?: string;
   WRITER_KEY?: string;
   EVALBOT_KEY?: string;
+  NOTES_KEY?: string; // optional key for team notes (private drive only); falls back to EVALBOT_KEY
 }
