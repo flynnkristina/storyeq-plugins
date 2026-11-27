@@ -5,6 +5,7 @@
 import { execFileSync } from "node:child_process";
 import { strict as assert } from "node:assert";
 import { libraryFor, mayUse } from "../src/roles";
+import { sendNote } from "../src/team-notes";
 
 const kc = (service: string, account: string) =>
   Buffer.from(
@@ -21,6 +22,8 @@ const env: any = {
   WRITER_KEY: kc("StoryEQ library key", plugin),
   READER_KEY: kc("StoryEQ library key (reader)", plugin),
   EVALBOT_KEY: kc("StoryEQ library key", `${plugin}:evalbot`),
+  LEADER_NAME: "the leader",
+  NOTES_FOLDER: "_connector_check/team-notes",
   LEADER_EMAILS: "leader@example.com",
   TEAM_DOMAINS: "example.com",
 };
@@ -64,6 +67,16 @@ console.log("ok   eval bot appended under private/");
 const botHits = await bot.search("answers", 10);
 assert.ok(botHits.every((h: any) => !String(h.path).toLowerCase().startsWith("answers/")));
 console.log("ok   eval bot search shows nothing from answers/");
+
+const counts = new Map<string, string>();
+const counter = { get: async (k: string) => counts.get(k) ?? null, put: async (k: string, v: string) => void counts.set(k, v) };
+const note = await sendNote(env, "teammate@example.com", { kind: "rule", about: "hosted connector check", reason: `live check ${stamp}` }, { counter });
+assert.ok(note.savedAs.startsWith("private/_connector_check/team-notes/"));
+const saved = await leader.read(note.savedAs);
+assert.ok(saved.includes("teammate@example.com") && saved.includes(`> live check ${stamp}`));
+console.log(`ok   team note saved to the private drive and the leader reads it (${note.savedAs})`);
+await refused(() => team.read(note.savedAs), "team reading the note it just sent");
+await refused(() => team.list("private/_connector_check/team-notes"), "team listing the notes folder");
 
 assert.equal(mayUse(env, "team", "someone@example.com"), true);
 assert.equal(mayUse(env, "team", "someone@elsewhere.com"), false);

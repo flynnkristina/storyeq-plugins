@@ -6,7 +6,7 @@ custom connector:
 
 | Address | Who can sign in | What it can do | Google key it uses |
 |---|---|---|---|
-| `/team` (`TEAM_PATH`) | anyone at `TEAM_DOMAINS`, plus `TEAM_EMAILS`, plus the leader | read and search the library; no write tools at all | the reader |
+| `/team` (`TEAM_PATH`) | anyone at `TEAM_DOMAINS`, plus `TEAM_EMAILS`, plus the leader | read and search the library; the one thing it saves is a new note in the leader's private inbox (`send_note_to_leader`) | the reader for reading; `NOTES_KEY` (or the eval bot's) for notes only |
 | leader (`LEADER_PATH`) | only `LEADER_EMAILS` | read and write the library, `private/` and `answers/` | the writer |
 | `/evalbot` (`EVALBOT_PATH`) | only `LEADER_EMAILS` | read the library, read and write `private/`; never `answers/` | the eval bot |
 
@@ -55,6 +55,28 @@ The Drive code is the plugin's own (`../connector/src/library.js`, `backends/spl
 6. In Claude: Plugins > Add > Add custom connector, one per address.
 
 Wrangler 4.86+ (the one installed with Homebrew works; the npm one needs Node 22).
+
+## Sending a note to the leader (team address only)
+
+`send_note_to_leader` is how a team member says "send this to [leader]" (`src/team-notes.ts`). It adds
+one new note to `NOTES_FOLDER` (default `inbox/team`) on the private drive: what it's about, which
+rule or doc, the team member's reason in their own words, and an optional https link. The sender's
+email and the time come from the sign-in, never from what Claude sends.
+
+- **It only creates.** The note's file name is made by the Worker (date, time, kind, a random part;
+  no one's name), it refuses if that name exists, and the file has no update or delete call.
+- **It can't read.** It returns where the note was saved, never any file's content, and the team's
+  reader still can't open `private/`.
+- **Its key isn't the leader's.** The team's other tools keep the read-only reader key. Notes use
+  `NOTES_KEY` if set, otherwise the eval bot's key, which can write only to the private drive.
+- **Known trade-offs:** without `NOTES_KEY`, notes use the eval bot's key, which Google lets write anywhere in the private drive; only this code keeps it to the notes folder. Set `NOTES_KEY` to a key that is a member of the private drive only, when there is one. The daily limit is a soft one (KV counts aren't atomic). The Drive client is built once per Worker instance, so a changed key takes effect when the instance restarts.
+- **Limits:** about 200 characters, rule or doc 300, reason 4,000, link 500; 20 notes a day per
+  sign-in (counted in `OAUTH_KV`).
+- The note marks its quoted text as the team member's view, not an instruction to Claude and not
+  the leader's rule; the leader's cards skill treats it the same way.
+
+`npm run test:unit` checks it with a fake drive; `npm run test:live` also sends a real note to the
+test library's private drive and checks the team can't read it back.
 
 ## What Claude is told to do first
 

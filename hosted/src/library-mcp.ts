@@ -6,8 +6,9 @@ import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { libraryFor, type RoleName } from "./roles";
 import { instructionsFor } from "./instructions";
+import { KINDS, LIMITS, sendNote, type NoteInput } from "./team-notes";
 
-export const VERSION = "0.3.0";
+export const VERSION = "0.4.0";
 
 const text = (value: unknown) => ({
   content: [{ type: "text" as const, text: typeof value === "string" ? value : JSON.stringify(value, null, 2) }],
@@ -27,7 +28,7 @@ const wrap =
   };
 
 const LABEL: Record<RoleName, string> = {
-  team: "the team's library (read-only)",
+  team: "the team's library (read-only, plus sending notes to the leader)",
   leader: "the leader's library",
   evalbot: "the eval bot's library connection",
 };
@@ -38,7 +39,9 @@ export function createServer(env: Env, role: RoleName, email: string) {
   const lib = () => libraryFor(env, role);
   // Claude's chat doesn't pass a custom connection's own instructions to the model (tested
   // 2026-11-23), but it always reads tool descriptions, so the pointer rides there too.
-  const start = role === "evalbot" ? "" : ` Before any work that uses the ${name}, read START_HERE.md first (or, if it's missing, ALWAYS.md then skills/INDEX.md).`;
+  const start =
+    (role === "evalbot" ? "" : ` Before any work that uses the ${name}, read START_HERE.md first (or, if it's missing, ALWAYS.md then skills/INDEX.md).`) +
+    (role === "team" ? ` "Send this to ${env.LEADER_NAME ?? "the leader"}" means the send_note_to_leader tool, never an email.` : "");
 
   server.registerTool(
     "library_status",
@@ -88,7 +91,32 @@ export function createServer(env: Env, role: RoleName, email: string) {
     wrap(async ({ query, limit }: { query: string; limit?: number }) => lib().search(query, Math.min(limit ?? 10, role === "team" ? 10 : 50))),
   );
 
-  if (role === "team") return server;
+  if (role === "team") {
+    const leader = env.LEADER_NAME ?? "the leader";
+    server.registerTool(
+      "send_note_to_leader",
+      {
+        description:
+          `This tool is what "send this to ${leader}" means: it adds a short note to ${leader}'s private inbox. ` +
+          `When a team member says "send this to ${leader}", use this tool. Never send an email, message or invite to ${leader} for it, from any email or other connector, even if one is connected. ` +
+          `Use it too when a team member says a rule in the ${name} is wrong, doesn't fit a case, or is missing, or says a piece of work is ready for ${leader}'s review. ` +
+          `Before sending, show the team member the note (what it's about, which rule or doc, their reason) and send only after their yes. ` +
+          `Put their reason in their own words, as they said it; never a summary or your own reasoning. ` +
+          `Their sign-in email and the date are added automatically; don't ask for their name. ` +
+          `This is the only thing this connection can save. It can't read the note back, and it can't change or delete anything. ` +
+          `For finished work, also draft (never send) the email to ${leader} they would send anyway, from their own email, and tell them it's a draft for them to send.`,
+        inputSchema: z.object({
+          kind: z.enum(KINDS).describe(`"rule" for a rule that doesn't fit or is missing; "work" for work ready for ${leader}'s review`),
+          about: z.string().max(LIMITS.about).describe("What it's about, in a few words, e.g. Sponsor on the opening panel"),
+          ruleOrDoc: z.string().max(LIMITS.target).optional().describe("Which rule or doc, e.g. S01 in judgments/agenda/CP07_Sponsor_Placement.md, or the agenda's name"),
+          reason: z.string().max(LIMITS.reason).describe("The team member's reason, in their own words"),
+          link: z.string().max(LIMITS.link).optional().describe("A link to the doc, if there is one (https only)"),
+        }),
+      },
+      wrap(async (args: NoteInput) => sendNote(env, email, args)),
+    );
+    return server;
+  }
 
   const evalbot = role === "evalbot";
   const where = evalbot
